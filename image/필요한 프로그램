@@ -1,1 +1,1 @@
-이게 실행이 되려면 postman 이나 curl이 있어야 되는 것 같아요.
+postman이 있으면 fastapi가 작동이 되는지 확인하기 편해요
