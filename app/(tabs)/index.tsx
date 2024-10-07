@@ -1,69 +1,62 @@
-import PhotoPreviewSection from '@/components/PhotoPreviewSection';
-import { AntDesign } from '@expo/vector-icons';
+import React, { useRef, useState } from 'react';
+import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, CameraCapturedPicture } from 'expo-camera';
-import { useRef, useState } from 'react';
-import { Button, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Audio } from 'expo-av';
+import { AntDesign } from '@expo/vector-icons';
+import axios from 'axios';
 
-export default function Camera() {
+const App = () => {
+  // State variables for camera and audio
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [photo, setPhoto] = useState<CameraCapturedPicture | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [text, setText] = useState<string>('');
 
+  // Handle camera permissions
   if (!permission) {
-    // Camera permissions are still loading.
     return <View />;
   }
-
   if (!permission.granted) {
-    // Camera permissions are not granted yet.
     return (
       <View style={styles.container}>
-        <Text style={{ textAlign: 'center' }}>We need your permission to show the camera</Text>
-        <Button onPress={requestPermission} title="grant permission" />
+        <Button onPress={requestPermission} title="Grant Camera Permission" />
       </View>
     );
   }
 
-  function toggleCameraFacing() {
+  // Toggle between front and back camera
+  const toggleCameraFacing = () => {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
-  }
+  };
 
+  // Handle photo capture and upload
   const handleTakePhoto = async () => {
     if (cameraRef.current) {
-      const options = {
-        quality: 1,
-        base64: true,
-        exif: false,
-      };
-
-      // 명시적으로 CameraCapturedPicture로 타입 캐스팅
+      const options = { quality: 1, base64: true, exif: false };
       const takedPhoto = (await cameraRef.current.takePictureAsync(options)) as CameraCapturedPicture;
-
       setPhoto(takedPhoto);
-      await uploadPhoto(takedPhoto); // 사진을 찍은 후 업로드
+      await uploadPhoto(takedPhoto);
     }
   };
 
   const uploadPhoto = async (takedPhoto: CameraCapturedPicture) => {
     const formData = new FormData();
-    
-    // FormData에 파일을 추가할 때, uri, type, name 속성을 가진 객체로 추가
     formData.append('file', {
       uri: takedPhoto.uri,
       name: 'photo.jpg',
       type: 'image/jpeg',
-    } as unknown as Blob); // 타입 캐스팅으로 오류 방지
+    } as unknown as Blob);
 
     try {
-      const response = await fetch('http://<컴퓨터 IP 주소>:8000/upload/photo', {
+      const response = await fetch('http://172.16.108.158:8000/upload/photo', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         body: formData,
       });
-
       const result = await response.json();
       console.log('Upload result:', result);
     } catch (error) {
@@ -71,12 +64,82 @@ export default function Camera() {
     }
   };
 
-  const handleRetakePhoto = () => setPhoto(null);
+  // Handle text upload
+  const uploadText = async () => {
+    try {
+      const response = await axios.post('http://172.30.1.66:8000/upload/text', { text });
+      Alert.alert('Success', response.data.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        Alert.alert('Error', 'Failed to upload text: ' + error.message);
+      } else {
+        Alert.alert('Error', 'An unknown error occurred.');
+      }
+    }
+  };
+  
 
-  if (photo) return <PhotoPreviewSection photo={photo} handleRetakePhoto={handleRetakePhoto} />;
+  // Handle audio recording and upload
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.granted) {
+        const { recording } = await Audio.Recording.createAsync();
+        setRecording(recording);
+      } else {
+        Alert.alert('Permission Denied', 'You need to allow audio recording permission.');
+      }
+    } catch (error:unknown) {
+      if (error instanceof Error) {
+        Alert.alert('Error', 'Failed to upload text: ' + error.message);
+      } else {
+        Alert.alert('Error', 'An unknown error occurred.');
+      }
+    }
+  };
+
+  const stopRecording = async () => {
+    if (recording) {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      if (uri) {
+        uploadAudio(uri);
+      } else {
+        Alert.alert('Error', 'Failed to retrieve audio URI.');
+      }
+      setRecording(null);
+    }
+  };
+
+  const uploadAudio = async (uri: string) => {
+    const formData = new FormData();
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    formData.append('file', {
+      uri,
+      name: 'audio.wav',
+      type: 'audio/wav',
+    } as unknown as Blob);
+
+    try {
+      const response = await fetch('http://172.16.108.158:8000/upload/audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formData,
+      });
+      const result = await response.json();
+      console.log('Upload result:', result);
+    } catch (error) {
+      console.error('Error uploading audio:', error);
+    }
+  };
 
   return (
     <View style={styles.container}>
+      {/* Camera Section */}
       <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
@@ -87,35 +150,42 @@ export default function Camera() {
           </TouchableOpacity>
         </View>
       </CameraView>
+
+      {/* Text Input Section */}
+      <TextInput
+        placeholder="Enter text"
+        value={text}
+        onChangeText={setText}
+        style={{ height: 40, borderColor: 'gray', borderWidth: 1, marginBottom: 10, color: 'white' }}
+      />
+      <Button title="Upload Text" onPress={uploadText} />
+
+      {/* Audio Recording Section */}
+      <Button title={recording ? 'Stop Recording' : 'Start Recording'} onPress={recording ? stopRecording : startRecording} />
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
+    padding: 20,
   },
   camera: {
     flex: 1,
   },
   buttonContainer: {
-    flex: 1,
     flexDirection: 'row',
-    backgroundColor: 'transparent',
     margin: 64,
   },
   button: {
     flex: 1,
-    alignSelf: 'flex-end',
     alignItems: 'center',
-    marginHorizontal: 10,
     backgroundColor: 'gray',
     borderRadius: 10,
-  },
-  text: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+    marginHorizontal: 10,
   },
 });
+
+export default App;
