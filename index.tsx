@@ -54,7 +54,7 @@ const App = () => {
       } as unknown as Blob);
 
       try {
-        const response = await fetch('http://192.168.0.93:8000/upload/photo', {
+        const response = await fetch('http://<ip주소>:8000/upload/photo', {
           method: 'POST',
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -75,7 +75,7 @@ const App = () => {
   // Handle text upload
   const uploadText = async () => {
     try {
-      const response = await axios.post('http://192.168.0.93:8000/upload/text', { text });
+      const response = await axios.post('http://<ip주소>:8000/upload/text', { text });
       Alert.alert('Success', response.data.message);
 
       setText('');
@@ -132,7 +132,7 @@ const App = () => {
     } as unknown as Blob);
 
     try {
-      const response = await fetch('http://192.168.0.93:8000/upload/audio', {
+      const response = await fetch('http://<ip주소>:8000/upload/audio', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
