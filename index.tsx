@@ -211,9 +211,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  inner: {
-    flex:1, // 부모 요소에 맞춰서 사용
-  },
   chatInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
