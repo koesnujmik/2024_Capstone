@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>음성 인식</title>
+</head>
+<body>
+    <h1>음성 인식</h1>
+    <button onclick="startListening()">시작</button>
+    <script>
+        let recognition;
+
+        function startListening() {
+            if (!('webkitSpeechRecognition' in window)) {
+                alert('음성 인식 API를 지원하지 않습니다.');
+                return;
+            }
+            recognition = new webkitSpeechRecognition();
+            recognition.lang = 'ko-KR'; // 언어를 한국어로 설정
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = function() {
+                console.log('음성 인식 시작. 말하세요.');
+            };
+
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                console.log('인식된 내용: ' + transcript);
+                if (transcript.toLowerCase() === '안녕 요리') {
+                    window.ReactNativeWebView.postMessage('start-recording');
+                }
+            };
+
+            recognition.onerror = function(event) {
+                console.error('음성 인식 오류:', event.error);
+            };
+
+            recognition.onend = function() {
+                console.log('음성 인식 종료.');
+            };
+
+            recognition.start();
+        }
+    </script>
+</body>
+</html>
