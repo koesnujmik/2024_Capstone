@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet, Text,KeyboardAvoidingView,Platform,TouchableWithoutFeedback, Keyboard, ScrollView,SafeAreaView,StatusBar} from 'react-native';
+import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, SafeAreaView, StatusBar } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, CameraCapturedPicture } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
@@ -20,60 +20,59 @@ const App = () => {
   const [answer, setAnswer] = useState('');
   const [chatLog, setChatLog] = useState<{ sender: string, text: string }[]>([]);
 
-    // Handle camera permissions
-    if (!permission) {
-      return <View />;
+  // Handle camera permissions
+  if (!permission) {
+    return <View />;
+  }
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Button onPress={requestPermission} title="Grant Camera Permission" />
+      </View>
+    );
+  }
+
+  // Toggle between front and back camera
+  const toggleCameraFacing = () => {
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  };
+
+  // Handle photo capture and upload
+  const handleTakePhoto = async () => {
+    if (cameraRef.current) {
+      const options = { quality: 1, base64: true, exif: false };
+      const takedPhoto = (await cameraRef.current.takePictureAsync(options)) as CameraCapturedPicture;
+      setPhoto(takedPhoto);
+      await uploadPhoto(takedPhoto);
     }
-    if (!permission.granted) {
-      return (
-        <View style={styles.container}>
-          <Button onPress={requestPermission} title="Grant Camera Permission" />
-        </View>
-      );
+  };
+
+  const uploadPhoto = async (takedPhoto: CameraCapturedPicture) => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: takedPhoto.uri,
+      name: 'photo.jpg',
+      type: 'image/jpeg',
+    } as unknown as Blob);
+
+    try {
+      const response = await fetch('http://10.0.2.2:8000/upload/photo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formData,
+      });
+      const result = await response.json();
+      console.log('Upload result:', result);
+    } catch (error) {
+      console.error('Error uploading photo:', error);
     }
+  };
 
-    // Toggle between front and back camera
-    const toggleCameraFacing = () => {
-      setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
-    };
-
-    
-    // Handle photo capture and upload
-    const handleTakePhoto = async () => {
-      if (cameraRef.current) {
-        const options = { quality: 1, base64: true, exif: false };
-        const takedPhoto = (await cameraRef.current.takePictureAsync(options)) as CameraCapturedPicture;
-        setPhoto(takedPhoto);
-        await uploadPhoto(takedPhoto);
-      }
-    };
-
-    const uploadPhoto = async (takedPhoto: CameraCapturedPicture) => {
-      const formData = new FormData();
-      formData.append('file', {
-        uri: takedPhoto.uri,
-        name: 'photo.jpg',
-        type: 'image/jpeg',
-      } as unknown as Blob);
-
-      try {
-        const response = await fetch('http://10.0.2.2:8000/upload/photo', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          body: formData,
-        });
-        const result = await response.json();
-        console.log('Upload result:', result);
-      } catch (error) {
-        console.error('Error uploading photo:', error);
-      }
-    };
-
-    const toggleCameraView = () => {
-      setCameraVisible(!cameraVisible); // 카메라 뷰 토글
-    };
+  const toggleCameraView = () => {
+    setCameraVisible(!cameraVisible); // 카메라 뷰 토글
+  };
 
   // FastAPI 서버로 질문을 보내고 답변을 받는 함수
   const sendQuestion = async () => {
@@ -81,7 +80,7 @@ const App = () => {
 
     // 새로운 대화 로그에 사용자 질문 추가
     setChatLog(prevChatLog => [...prevChatLog, { sender: 'user', text: question }]);
-    
+
     try {
       const response = await fetch('http://10.0.2.2:8000/ask', {
         method: 'POST',
@@ -97,12 +96,12 @@ const App = () => {
 
       // 서버 응답을 대화 로그에 추가
       setChatLog(prevChatLog => [...prevChatLog, { sender: 'bot', text: data.answer }]);
-      
+
     } catch (error) {
       console.error('Error:', error);
       setChatLog(prevChatLog => [...prevChatLog, { sender: 'bot', text: 'Error connecting to the server' }]);
     }
-    
+
     setQuestion(''); // 질문 초기화
   };
 
@@ -113,16 +112,44 @@ const App = () => {
       if (permission.granted) {
         const { recording } = await Audio.Recording.createAsync();
         setRecording(recording);
+
+        // 음성 감지 후 2초 동안 소리가 감지되지 않으면 녹음 종료
+        recording.setOnRecordingStatusUpdate(async (status) => {
+          if (status.isRecording) {
+            const silenceDuration = await checkForSilence(recording);
+            if (silenceDuration >= 2000) { // 2초 동안 침묵 감지
+              stopRecording();
+            }
+          }
+        });
       } else {
         Alert.alert('Permission Denied', 'You need to allow audio recording permission.');
       }
-    } catch (error:unknown) {
+    } catch (error: unknown) {
       if (error instanceof Error) {
         Alert.alert('Error', 'Failed to upload text: ' + error.message);
       } else {
         Alert.alert('Error', 'An unknown error occurred.');
       }
     }
+  };
+
+  // 침묵 감지 함수
+  const checkForSilence = async (recording: Audio.Recording): Promise<number> => {
+    let silenceDuration = 0;
+    let intervalId: NodeJS.Timeout;
+
+    return new Promise((resolve) => {
+      intervalId = setInterval(async () => {
+        const status = await recording.getStatusAsync();
+        if (status.isRecording) {
+          silenceDuration += 100; // 0.1초마다 체크
+        } else {
+          clearInterval(intervalId);
+          resolve(silenceDuration);
+        }
+      }, 100); // 0.1초마다 체크
+    });
   };
 
   const stopRecording = async () => {
@@ -171,10 +198,10 @@ const App = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-            {/* 카메라 화면이 아닐 때 */}
-            {!cameraVisible && (
-              <View style={{ flex: 1 }}>
-              <ScrollView style={styles.chatContainer}>
+        {/* 카메라 화면이 아닐 때 */}
+        {!cameraVisible && (
+          <View style={{ flex: 1 }}>
+            <ScrollView style={styles.chatContainer}>
               {chatLog.map((chat, index) => (
                 <View key={index} style={chat.sender === 'user' ? styles.userMessage : styles.botMessage}>
                   <Text style={styles.chatText}>{chat.text}</Text>
@@ -193,47 +220,41 @@ const App = () => {
                 <Text style={styles.buttonText}>Send</Text>
               </TouchableOpacity>
 
-                {/* 녹음 버튼 */}
-                <TouchableOpacity onPress={recording ? stopRecording : startRecording} style={styles.iconButton}>
-                  <Ionicons name="mic" size={24} color="white" />
-                </TouchableOpacity>
+              {/* 녹음 버튼 */}
+              <TouchableOpacity onPress={recording ? stopRecording : startRecording} style={styles.iconButton}>
+                <Ionicons name="mic" size={24} color="white" />
+              </TouchableOpacity>
 
-                {/* 카메라 버튼 */}
-                <TouchableOpacity onPress={toggleCameraView} style={styles.iconButton}>
-                  <Ionicons name="camera" size={24} color="white" />
-                </TouchableOpacity>
+              {/* 카메라 버튼 */}
+              <TouchableOpacity onPress={toggleCameraView} style={styles.iconButton}>
+                <Ionicons name="camera" size={24} color="white" />
+              </TouchableOpacity>
             </View>
+          </View>
+        )}
+
+        {/* 카메라 화면이 보일 때 */}
+        {cameraVisible && (
+          <CameraView
+            style={styles.camera}
+            facing={facing}
+            ref={cameraRef}
+          >
+            <View style={styles.buttonContainer}>
+              {/* 뒤로가기 버튼 */}
+              <TouchableOpacity style={styles.backButton} onPress={toggleCameraView}>
+                <AntDesign name="arrowleft" size={24} color="black" />
+              </TouchableOpacity>
+
+              {/* 사진 촬영 버튼 */}
+              <TouchableOpacity onPress={handleTakePhoto} style={styles.button}>
+                <Text style={styles.buttonText}>Take Photo</Text>
+              </TouchableOpacity>
             </View>
-            )} 
-
-            {/* 카메라 화면이 보일 때 */}
-            {cameraVisible && (
-              <CameraView
-                style={styles.camera}
-                facing={facing}
-                ref={cameraRef}
-              >
-                <View style={styles.buttonContainer}>
-                  {/* 뒤로가기 버튼 */}
-                  <TouchableOpacity style={styles.backButton} onPress={toggleCameraView}>
-                    <Ionicons name="arrow-back" size={32} color="white" />
-                  </TouchableOpacity>
-
-                  {/* 카메라 전환 버튼 */}
-                  <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
-                    <AntDesign name="retweet" size={44} color="black" />
-                  </TouchableOpacity>
-
-                  {/* 사진 촬영 버튼 */}
-                  <TouchableOpacity style={styles.button} onPress={handleTakePhoto}>
-                    <AntDesign name="camera" size={44} color="black" />
-                  </TouchableOpacity>
-                </View>
-              </CameraView>
-            )}
-          
+          </CameraView>
+        )}
       </KeyboardAvoidingView>
-      </View>  
+    </View>
   );
 };
 
@@ -322,5 +343,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
 });
+
 
 export default App;
