@@ -25,7 +25,8 @@ class Question(BaseModel):
 
 @app.post("/upload/photo")
 async def upload_photo(file: UploadFile = File(...)):
-    with open(f"uploaded_files/{file.filename}", "wb") as buffer:
+    file_location = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_location, "wb") as buffer:
         buffer.write(await file.read())
     return JSONResponse(content={"message": "Photo uploaded successfully!"})
 
