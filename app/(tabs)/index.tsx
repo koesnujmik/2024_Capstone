@@ -16,8 +16,10 @@ const App = () => {
   const [question, setQuestion] = useState('');
   const [chatLog, setChatLog] = useState<{ sender: string, text: string }[]>([]);
   const [isRecording, setIsRecording] = useState(false); // 녹음 상태 추가
-  let silenceDuration = 0; // 무음 지속 시간
-  const MAX_SILENCE_DURATION = 2000; // 2초
+  let silenceTimeout: NodeJS.Timeout | null = null; // 무음 체크 타이머
+  let monitoringInterval: NodeJS.Timeout | null = null; // 모니터링 인터벌
+  const silenceThreshold = -20; // dB, 필요에 따라 조정
+  const silenceDelay = 2000; // 2초
 
   if (!permission) {
     return <View />;
@@ -93,29 +95,45 @@ const App = () => {
     setQuestion('');
   };
 
+  async function monitorRecording() {
+    const recordingStatus = await recording?.getStatusAsync();
+    if (recordingStatus?.isRecording) {
+      const audioData = await recording?.getStatusAsync();
+      if (audioData?.metering && audioData.metering <= silenceThreshold) {
+        if (!silenceTimeout) {
+          silenceTimeout = setTimeout(stopRecording, silenceDelay);
+        }
+      } else {
+        clearTimeout(silenceTimeout!);
+        silenceTimeout = null;
+      }
+    }
+  }
+
+  function startMonitoring() {
+    monitoringInterval = setInterval(monitorRecording, 100); // 100ms마다 체크
+  }
+
+  function stopMonitoring() {
+    clearInterval(monitoringInterval!);
+  }
+
   const startRecording = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (permission.granted) {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
         const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         setRecording(recording);
-        setIsRecording(true); // 녹음 시작
-        silenceDuration = 0; // 무음 지속 시간 초기화
+        setIsRecording(true);
 
-        const silenceChecker = setInterval(async () => {
-          const status = await recording.getStatusAsync();
-          if (status.isRecording) {
-            const currentSilence = await checkForSilence(recording);
-            silenceDuration += currentSilence;
+        startMonitoring(); // 모니터링 시작
 
-            if (silenceDuration >= MAX_SILENCE_DURATION) {
-              clearInterval(silenceChecker);
-              stopRecording(); // 자동 멈춤
-            }
-          } else {
-            clearInterval(silenceChecker); // 녹음이 멈추면 체크도 중지
-          }
-        }, 100);
+        console.log('Recording started');
       } else {
         Alert.alert('Permission Denied', 'You need to allow audio recording permission.');
       }
@@ -126,6 +144,7 @@ const App = () => {
 
   const stopRecording = async () => {
     if (recording && isRecording) {
+      stopMonitoring(); // 모니터링 중지
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       if (uri) {
@@ -134,21 +153,10 @@ const App = () => {
         Alert.alert('Error', 'Failed to retrieve audio URI.');
       }
       setRecording(null);
-      setIsRecording(false); // 녹음 상태 초기화
+      setIsRecording(false);
+      console.log('Recording stopped and stored at', uri);
     }
   };
-
-  const checkForSilence = async (recording: Audio.Recording): Promise<number> => {
-    const status = await recording.getStatusAsync();
-    if (status.metering && status.metering < 50) { // 음량이 50 이하인 경우
-      silenceDuration += 100; // 100ms 무음이 지속됨
-      return 100; // 무음 상태
-    } else {
-      silenceDuration = 0; // 소리 감지 시 무음 지속 시간 초기화
-      return 0; // 소리 감지
-    }
-  };
-
 
   const uploadAudio = async (uri: string) => {
     const formData = new FormData();
