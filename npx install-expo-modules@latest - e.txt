@@ -1,0 +1,2 @@
+npx install-expo-modules@latest -> expo 업데이트
+npm install expo -> 수동 업데이트
