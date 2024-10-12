@@ -16,7 +16,6 @@ const App = () => {
   const [question, setQuestion] = useState('');
   const [chatLog, setChatLog] = useState<{ sender: string, text: string }[]>([]);
   const [isRecording, setIsRecording] = useState(false); // 녹음 상태 추가
-  let silenceDuration = 0; // 무음 지속 시간
   const MAX_SILENCE_DURATION = 2000; // 2초
 
   if (!permission) {
@@ -99,14 +98,19 @@ const App = () => {
       if (permission.granted) {
         const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         setRecording(recording);
-        setIsRecording(true); // 녹음 시작
-        silenceDuration = 0; // 무음 지속 시간 초기화
+        setIsRecording(true);
 
+        let silenceDuration = 0; // 무음 지속 시간 초기화
         const silenceChecker = setInterval(async () => {
-          const status = await recording.getStatusAsync();
-          if (status.isRecording) {
-            const currentSilence = await checkForSilence(recording);
-            silenceDuration += currentSilence;
+          if (isRecording) {
+            const status = await recording.getStatusAsync();
+            const metering = status.metering || 0; // 메타링 값이 없을 경우 기본값 0 사용
+
+            if (metering < 1000) { // 음량이 1000 이하일 경우
+              silenceDuration += 100; // 100ms 동안 무음으로 간주
+            } else {
+              silenceDuration = 0; // 소리 감지 시 무음 지속 시간 초기화
+            }
 
             if (silenceDuration >= MAX_SILENCE_DURATION) {
               clearInterval(silenceChecker);
@@ -134,21 +138,9 @@ const App = () => {
         Alert.alert('Error', 'Failed to retrieve audio URI.');
       }
       setRecording(null);
-      setIsRecording(false); // 녹음 상태 초기화
+      setIsRecording(false);
     }
   };
-
-  const checkForSilence = async (recording: Audio.Recording): Promise<number> => {
-    const status = await recording.getStatusAsync();
-    if (status.metering && status.metering < 50) { // 음량이 50 이하인 경우
-      silenceDuration += 100; // 100ms 무음이 지속됨
-      return 100; // 무음 상태
-    } else {
-      silenceDuration = 0; // 소리 감지 시 무음 지속 시간 초기화
-      return 0; // 소리 감지
-    }
-  };
-
 
   const uploadAudio = async (uri: string) => {
     const formData = new FormData();
