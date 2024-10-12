@@ -54,7 +54,7 @@ const App = () => {
     } as unknown as Blob);
 
     try {
-      const response = await fetch('http://221.149.60.113:8000/upload/photo', {
+      const response = await fetch('http://ip:8000/upload/photo', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -76,7 +76,7 @@ const App = () => {
     if (!question.trim()) return;
     setChatLog(prevChatLog => [...prevChatLog, { sender: 'user', text: question }]);
     try {
-      const response = await fetch('http://221.149.60.113:8000/ask', {
+      const response = await fetch('http://ip:8000/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -170,7 +170,7 @@ const App = () => {
     } as unknown as Blob);
 
     try {
-      const response = await fetch('http://221.149.60.113:8000/upload/audio', {
+      const response = await fetch('http://ip:8000/upload/audio', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
