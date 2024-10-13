@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, StatusBar } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, CameraCapturedPicture } from 'expo-camera';
 import { Audio } from 'expo-av';
@@ -16,10 +16,20 @@ const App = () => {
   const [question, setQuestion] = useState('');
   const [chatLog, setChatLog] = useState<{ sender: string, text: string }[]>([]);
   const [isRecording, setIsRecording] = useState(false); // 녹음 상태 추가
-  let silenceTimeout: NodeJS.Timeout | null = null; // 무음 체크 타이머
-  let monitoringInterval: NodeJS.Timeout | null = null; // 모니터링 인터벌
-  const silenceThreshold = -20; // dB, 필요에 따라 조정
-  const silenceDelay = 2000; // 2초
+  const MAX_SILENCE_DURATION = 2000; // 2초
+  const SILENCE_THRESHOLD = -50;
+  const silenceCheckerRef = useRef<NodeJS.Timeout | null>(null);
+  const silenceDurationRef = useRef(0);
+
+  useEffect(() => {
+    // Clean up the silence checker when component is unmounted
+    return () => {
+      if (silenceCheckerRef.current) {
+        clearInterval(silenceCheckerRef.current);
+      }
+    };
+  }, []); 
+  
 
   if (!permission) {
     return <View />;
@@ -54,7 +64,7 @@ const App = () => {
     } as unknown as Blob);
 
     try {
-      const response = await fetch('http://ip:8000/upload/photo', {
+      const response = await fetch('http://221.149.60.113:8000/upload/photo', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -76,7 +86,7 @@ const App = () => {
     if (!question.trim()) return;
     setChatLog(prevChatLog => [...prevChatLog, { sender: 'user', text: question }]);
     try {
-      const response = await fetch('http://ip:8000/ask', {
+      const response = await fetch('http://221.149.60.113:8000/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,66 +105,68 @@ const App = () => {
     setQuestion('');
   };
 
-  async function monitorRecording() {
-    const recordingStatus = await recording?.getStatusAsync();
-    if (recordingStatus?.isRecording) {
-      const audioData = await recording?.getStatusAsync();
-      if (audioData?.metering && audioData.metering <= silenceThreshold) {
-        if (!silenceTimeout) {
-          silenceTimeout = setTimeout(stopRecording, silenceDelay);
-        }
-      } else {
-        clearTimeout(silenceTimeout!);
-        silenceTimeout = null;
-      }
-    }
-  }
-
-  function startMonitoring() {
-    monitoringInterval = setInterval(monitorRecording, 100); // 100ms마다 체크
-  }
-
-  function stopMonitoring() {
-    clearInterval(monitoringInterval!);
-  }
-
   const startRecording = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (permission.granted) {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-
         const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+
         setRecording(recording);
         setIsRecording(true);
+        silenceDurationRef.current = 0;
 
-        startMonitoring(); // 모니터링 시작
+        silenceCheckerRef.current = setInterval(async () => {
+          if (isRecording && recording) {
+            const status = await recording.getStatusAsync();
+            console.log('Metering value:', status.metering);
 
-        console.log('Recording started');
+            if (status.metering !== undefined && status.metering <= SILENCE_THRESHOLD) {
+              // Silence detected
+              silenceDurationRef.current += 100;
+              console.log('Silence duration:', silenceDurationRef.current);
+            } else {
+              // Reset silence duration if sound is detected above threshold
+              silenceDurationRef.current = 0;
+            }
+
+            if (silenceDurationRef.current >= MAX_SILENCE_DURATION) {
+              stopRecording(); // Stop recording after prolonged silence
+            }
+          } else if (silenceCheckerRef.current) {
+            clearInterval(silenceCheckerRef.current); // Stop checking if recording has stopped
+            silenceCheckerRef.current = null;
+          }
+        }, 100);
       } else {
         Alert.alert('Permission Denied', 'You need to allow audio recording permission.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to start recording: ' + (error instanceof Error ? error.message : 'An unknown error occurred.'));
+      Alert.alert(
+        'Error',
+        'Failed to start recording: ' + (error instanceof Error ? error.message : 'An unknown error occurred.')
+      );
     }
   };
 
   const stopRecording = async () => {
     if (recording && isRecording) {
-      stopMonitoring(); // 모니터링 중지
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      if (uri) {
-        await uploadAudio(uri);
-      } else {
-        Alert.alert('Error', 'Failed to retrieve audio URI.');
+      try {
+        setIsRecording(false);
+        if (silenceCheckerRef.current) {
+          clearInterval(silenceCheckerRef.current);
+          silenceCheckerRef.current = null;
+        }
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        if (uri) {
+          await uploadAudio(uri);
+        } else {
+          Alert.alert('Error', 'Failed to retrieve audio URI.');
+        }
+        setRecording(null);
+      } catch (error) {
+        Alert.alert('Error', 'Failed to stop recording: ' + (error instanceof Error ? error.message : 'An unknown error occurred.'));
       }
-      setRecording(null);
-      setIsRecording(false);
-      console.log('Recording stopped and stored at', uri);
     }
   };
 
@@ -170,17 +182,21 @@ const App = () => {
     } as unknown as Blob);
 
     try {
-      const response = await fetch('http://ip:8000/upload/audio', {
+      const uploadResponse = await fetch('http://221.149.60.113:8000/upload/audio', {
         method: 'POST',
+        body: formData,
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        body: formData,
       });
-      const result = await response.json();
-      console.log('Upload result:', result);
+
+      if (uploadResponse.ok) {
+        Alert.alert('Success', 'Audio uploaded successfully.');
+      } else {
+        Alert.alert('Upload Failed', 'Failed to upload audio.');
+      }
     } catch (error) {
-      console.error('Error uploading audio:', error);
+      Alert.alert('Error', 'Failed to upload audio: ' + (error instanceof Error ? error.message : 'An unknown error occurred.'));
     }
   };
 
