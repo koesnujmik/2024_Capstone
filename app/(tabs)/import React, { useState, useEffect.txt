@@ -1,0 +1,78 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Button, Text } from 'react-native';
+import { Audio } from 'expo-av';
+
+export default function App() {
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [message, setMessage] = useState('녹음 시작 버튼을 눌러주세요.');
+  const [isSilent, setIsSilent] = useState(false);
+  const silenceTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const DECIBEL_THRESHOLD = -50; // 무음으로 간주할 데시벨 임계값
+  const SILENCE_DURATION = 2000; // 2초(2000ms)
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        alert('오디오 권한이 필요합니다!');
+      }
+    })();
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      setMessage('녹음 중...');
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
+      );
+      setRecording(recording);
+      monitorRecording(recording);
+    } catch (err) {
+      console.error('녹음 시작 오류:', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (silenceTimeout.current) {
+      clearTimeout(silenceTimeout.current);
+    }
+    setMessage('녹음 중지됨.');
+    await recording?.stopAndUnloadAsync();
+    setRecording(null);
+  };
+
+  const monitorRecording = (recording: Audio.Recording) => {
+    const checkVolume = async () => {
+      const status = await recording.getStatusAsync();
+      if (status.metering) {
+        const { metering } = status;
+        if (metering < DECIBEL_THRESHOLD) {
+          if (!isSilent) {
+            setIsSilent(true);
+            silenceTimeout.current = setTimeout(stopRecording, SILENCE_DURATION);
+          }
+        } else {
+          if (isSilent) {
+            setIsSilent(false);
+            if (silenceTimeout.current) {
+              clearTimeout(silenceTimeout.current);
+            }
+          }
+        }
+      }
+      requestAnimationFrame(checkVolume);
+    };
+    checkVolume();
+  };
+
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Text>{message}</Text>
+      <Button
+        title={recording ? '녹음 중지' : '녹음 시작'}
+        onPress={recording ? stopRecording : startRecording}
+      />
+    </View>
+  );
+}
