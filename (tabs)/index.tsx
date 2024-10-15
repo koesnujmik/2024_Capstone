@@ -1,166 +1,270 @@
-import React, { useRef, useState } from 'react';
-import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet, Text,KeyboardAvoidingView,Platform,TouchableWithoutFeedback, Keyboard, ScrollView,SafeAreaView,StatusBar} from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet, Text, KeyboardAvoidingView, Platform, ScrollView, StatusBar } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, CameraCapturedPicture } from 'expo-camera';
 import { Audio } from 'expo-av';
-import { AntDesign, Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
+import { Ionicons,AntDesign } from '@expo/vector-icons';
 
 const App = () => {
-  // State variables for camera and audio
   const [permission, requestPermission] = useCameraPermissions();
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [text, setText] = useState('');
-
   const [photo, setPhoto] = useState<CameraCapturedPicture | null>(null);
-  const [facing, setFacing] = useState<CameraType>('back'); // 카메라 방향 상태
-  const [cameraVisible, setCameraVisible] = useState(false); // 카메라 보이기/숨기기 상태
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [cameraVisible, setCameraVisible] = useState(false);
   const cameraRef = useRef<CameraView | null>(null);
-
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
   const [chatLog, setChatLog] = useState<{ sender: string, text: string }[]>([]);
 
-    // Handle camera permissions
-    if (!permission) {
-      return <View />;
-    }
-    if (!permission.granted) {
-      return (
-        <View style={styles.container}>
-          <Button onPress={requestPermission} title="Grant Camera Permission" />
-        </View>
-      );
-    }
+  const [isRecording, setIsRecording] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isStoppedRef = useRef(false);
+  const SILENCE_THRESHOLD = -80; // 무음으로 간주할 데시벨 임계값
+  const SILENCE_DURATION = 2000; // 무음 지속 시간 (밀리초)
 
-    // Toggle between front and back camera
-    const toggleCameraFacing = () => {
-      setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
-    };
 
-    
-    // Handle photo capture and upload
-    const handleTakePhoto = async () => {
-      if (cameraRef.current) {
-        const options = { quality: 1, base64: true, exif: false };
-        const takedPhoto = (await cameraRef.current.takePictureAsync(options)) as CameraCapturedPicture;
-        setPhoto(takedPhoto);
-        await uploadPhoto(takedPhoto);
+  useEffect(() => {
+    return () => {
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync();
       }
     };
+  }, []);
+  
 
-    const uploadPhoto = async (takedPhoto: CameraCapturedPicture) => {
-      const formData = new FormData();
-      formData.append('file', {
-        uri: takedPhoto.uri,
-        name: 'photo.jpg',
-        type: 'image/jpeg',
-      } as unknown as Blob);
+  if (!permission) {
+    return <View />;
+  }
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Button onPress={requestPermission} title="Grant Camera Permission" />
+      </View>
+    );
+  }
 
-      try {
-        const response = await fetch('http://10.0.2.2:8000/upload/photo', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          body: formData,
+  const toggleCameraFacing = () => {
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  };
+
+  const handleTakePhoto = async () => {
+    if (cameraRef.current) {
+      const options = { quality: 1, base64: true, exif: false };
+      const takedPhoto = (await cameraRef.current.takePictureAsync(options)) as CameraCapturedPicture;
+      setPhoto(takedPhoto);
+      await uploadPhoto(takedPhoto);
+    }
+  };
+
+  const uploadPhoto = async (takedPhoto: CameraCapturedPicture) => {
+    const formData = new FormData();
+    
+    const photoFile = new File(
+        [await fetch(takedPhoto.uri).then(res => res.blob())],
+        'photo.jpg', 
+        { type: 'image/jpeg' } 
+    );
+
+    formData.append('file', photoFile);
+
+    try {
+        const response = await fetch('http://192.168.0.93:8000/upload/photo', {
+            method: 'POST',
+            body: formData,
         });
+
+        // 응답 상태가 200 (성공)이 아닐 경우 오류 처리
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Upload failed:', response.status, errorText);
+            throw new Error(`Upload failed with status: ${response.status}`);
+        }
+
         const result = await response.json();
         console.log('Upload result:', result);
-      } catch (error) {
+    } catch (error) {
         console.error('Error uploading photo:', error);
-      }
-    };
+    }
+};
 
-    const toggleCameraView = () => {
-      setCameraVisible(!cameraVisible); // 카메라 뷰 토글
-    };
+  const toggleCameraView = () => {
+    setCameraVisible(!cameraVisible);
+  };
 
-  // FastAPI 서버로 질문을 보내고 답변을 받는 함수
   const sendQuestion = async () => {
-    if (!question.trim()) return; // 빈 질문 방지
+    if (!question.trim()) return;
 
-    // 새로운 대화 로그에 사용자 질문 추가
     setChatLog(prevChatLog => [...prevChatLog, { sender: 'user', text: question }]);
-    
     try {
-      const response = await fetch('http://10.0.2.2:8000/ask', {
+      const response = await fetch('http://192.168.0.93:8000/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          question: question,
+          text: question
         }),
       });
 
-      const data = await response.json();
+      // 응답이 성공인지 확인
+      if (!response.ok) {
+          const errorText = await response.text();
+          console.error('HTTP error:', response.status, errorText);
+          setChatLog(prevChatLog => [...prevChatLog, { sender: 'bot', text: 'Error: ' + errorText }]);
+          return;
+    }
 
-      // 서버 응답을 대화 로그에 추가
+      const data = await response.json();
       setChatLog(prevChatLog => [...prevChatLog, { sender: 'bot', text: data.answer }]);
-      
     } catch (error) {
       console.error('Error:', error);
       setChatLog(prevChatLog => [...prevChatLog, { sender: 'bot', text: 'Error connecting to the server' }]);
     }
-    
-    setQuestion(''); // 질문 초기화
+    setQuestion('');
   };
 
-  // Handle audio recording and upload
   const startRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.granted) {
-        const { recording } = await Audio.Recording.createAsync();
-        setRecording(recording);
-      } else {
-        Alert.alert('Permission Denied', 'You need to allow audio recording permission.');
-      }
-    } catch (error:unknown) {
-      if (error instanceof Error) {
-        Alert.alert('Error', 'Failed to upload text: ' + error.message);
-      } else {
-        Alert.alert('Error', 'An unknown error occurred.');
-      }
+        console.log('Requesting permissions..');
+        const { status } = await Audio.requestPermissionsAsync();
+        
+        if (status !== 'granted') {
+            console.error('Permission to access microphone was denied');
+            return;
+        }
+
+        // Set audio mode to allow recording
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true, // iOS에서 녹음을 허용
+            playsInSilentModeIOS: true, // 무음 모드에서도 재생 허용
+        });
+
+        console.log('Starting recording..');
+        const { recording } = await Audio.Recording.createAsync(
+            Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        
+        recordingRef.current = recording; // recording을 ref에 저장
+        setIsRecording(true);
+        isStoppedRef.current = false;
+
+        monitorRecording(recording);
+    } catch (err) {
+        console.error('Failed to start recording', err);
     }
-  };
+};
+
 
   const stopRecording = async () => {
-    if (recording) {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+    if (isStoppedRef.current) {
+      console.log('Recording is already stopped.');
+      return;
+    }
+  
+    const currentRecording = recordingRef.current; // 현재 recording을 참조
+  
+    if (!currentRecording) {
+      console.log('Recording does not exist, cannot stop.');
+      return;
+    }
+  
+    console.log('Stopping recording..');
+    try {
+      await currentRecording.stopAndUnloadAsync();
+      const uri = currentRecording.getURI();
+      console.log('Recording stopped and stored at', uri);
+      Alert.alert('녹음 종료', `녹음 파일이 저장되었습니다: ${uri}`);
+  
+      // Check if uri is not null before uploading
       if (uri) {
-        uploadAudio(uri);
+        await uploadAudio(uri);
       } else {
-        Alert.alert('Error', 'Failed to retrieve audio URI.');
+        console.error('Recording URI is null. Cannot upload.');
       }
-      setRecording(null);
+    } catch (err) {
+      console.error('Failed to stop recording', err);
+    } finally {
+      // Recording 객체를 null로 설정하고, 중지 상태로 업데이트
+      recordingRef.current = null; // recording을 null로 설정
+      setIsRecording(false);
+      isStoppedRef.current = true; // 중지 상태로 설정
+      // 타이머를 정리합니다.
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
     }
   };
-
+  
+  const monitorRecording = (recording: Audio.Recording) => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+    }
+  
+    const checkSilence = async () => {
+      if (isStoppedRef.current) return;
+  
+      const status = await recording.getStatusAsync();
+      if (status.metering !== undefined) {
+        console.log(`Current dB: ${status.metering}`);
+  
+        if (status.metering < SILENCE_THRESHOLD) {
+          console.log('Silence detected');
+          if (!silenceTimeoutRef.current) {
+            console.log('Starting silence timeout...');
+            silenceTimeoutRef.current = setTimeout(() => {
+              console.log('Silence duration exceeded, attempting to stop recording.');
+  
+              const currentRecording = recordingRef.current; // 현재 recording을 참조
+              if (currentRecording) {
+                stopRecording();
+              } else {
+                console.log('Recording does not exist, skipping stop.');
+              }
+            }, SILENCE_DURATION);
+          }
+        } else {
+          console.log('Sound detected, resetting timer');
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+        }
+      } else {
+        console.warn('Metering is undefined, checking again in next cycle');
+      }
+    };
+  
+    const intervalId = setInterval(checkSilence, 100);
+    return () => clearInterval(intervalId);
+  };
+  
   const uploadAudio = async (uri: string) => {
     const formData = new FormData();
-    const response = await fetch(uri);
-    const blob = await response.blob();
-
+    
+    // Add audio file to FormData
     formData.append('file', {
       uri,
       name: 'audio.wav',
       type: 'audio/wav',
-    } as unknown as Blob);
-
+    } as any);
+  
     try {
-      const response = await fetch('http://10.0.2.2:8000/upload/audio', {
+      const uploadResponse = await fetch('http://192.168.0.93:8000/upload/audio', {
         method: 'POST',
+        body: formData,
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        body: formData,
       });
-      const result = await response.json();
-      console.log('Upload result:', result);
+  
+      if (uploadResponse.ok) {
+        Alert.alert('Success', 'Audio uploaded successfully.');
+      } else {
+        Alert.alert('Upload Failed', 'Failed to upload audio.');
+      }
     } catch (error) {
-      console.error('Error uploading audio:', error);
+      Alert.alert('Error', 'Failed to upload audio: ' + (error instanceof Error ? error.message : 'An unknown error occurred.'));
     }
   };
 
@@ -169,19 +273,22 @@ const App = () => {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}  // 필요에 따라 조정
       >
-            {/* 카메라 화면이 아닐 때 */}
-            {!cameraVisible && (
-              <View style={{ flex: 1 }}>
-              <ScrollView style={styles.chatContainer}>
+        {!cameraVisible && (
+          <View style={{ flex: 1 }}>
+            <ScrollView
+              style={styles.chatContainer}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}  
+              keyboardShouldPersistTaps="handled" 
+            >
               {chatLog.map((chat, index) => (
                 <View key={index} style={chat.sender === 'user' ? styles.userMessage : styles.botMessage}>
                   <Text style={styles.chatText}>{chat.text}</Text>
                 </View>
               ))}
             </ScrollView>
-
+  
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
@@ -192,55 +299,46 @@ const App = () => {
               <TouchableOpacity onPress={sendQuestion} style={styles.iconButton}>
                 <Text style={styles.buttonText}>Send</Text>
               </TouchableOpacity>
-
-                {/* 녹음 버튼 */}
-                <TouchableOpacity onPress={recording ? stopRecording : startRecording} style={styles.iconButton}>
-                  <Ionicons name="mic" size={24} color="white" />
-                </TouchableOpacity>
-
-                {/* 카메라 버튼 */}
-                <TouchableOpacity onPress={toggleCameraView} style={styles.iconButton}>
-                  <Ionicons name="camera" size={24} color="white" />
-                </TouchableOpacity>
+  
+              <TouchableOpacity onPress={recording ? stopRecording : startRecording} style={styles.iconButton}>
+                <Ionicons name="mic" size={24} color="white" />
+              </TouchableOpacity>
+  
+              <TouchableOpacity onPress={toggleCameraView} style={styles.iconButton}>
+                <Ionicons name="camera" size={24} color="white" />
+              </TouchableOpacity>
             </View>
-            </View>
-            )} 
-
-            {/* 카메라 화면이 보일 때 */}
-            {cameraVisible && (
-              <CameraView
-                style={styles.camera}
-                facing={facing}
-                ref={cameraRef}
-              >
-                <View style={styles.buttonContainer}>
-                  {/* 뒤로가기 버튼 */}
-                  <TouchableOpacity style={styles.backButton} onPress={toggleCameraView}>
-                    <Ionicons name="arrow-back" size={32} color="white" />
-                  </TouchableOpacity>
-
-                  {/* 카메라 전환 버튼 */}
-                  <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
-                    <AntDesign name="retweet" size={44} color="black" />
-                  </TouchableOpacity>
-
-                  {/* 사진 촬영 버튼 */}
-                  <TouchableOpacity style={styles.button} onPress={handleTakePhoto}>
-                    <AntDesign name="camera" size={44} color="black" />
-                  </TouchableOpacity>
-                </View>
-              </CameraView>
-            )}
-          
+          </View>
+        )}
+  
+        {cameraVisible && (
+          <View style={{ flex: 1 }}>
+            <CameraView style={styles.camera} ref={cameraRef} facing={facing}>
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity style={styles.backButton} onPress={toggleCameraView}>
+                  <Ionicons name="arrow-back" size={32} color="white" />
+                </TouchableOpacity>
+  
+                <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
+                  <AntDesign name="retweet" size={44} color="black" />
+                </TouchableOpacity>
+  
+                <TouchableOpacity style={styles.button} onPress={handleTakePhoto}>
+                  <AntDesign name="camera" size={44} color="black" />
+                </TouchableOpacity>
+              </View>
+            </CameraView>
+          </View>
+        )}
       </KeyboardAvoidingView>
-      </View>  
-  );
+    </View>
+  );  
 };
 
 const styles = StyleSheet.create({
-  container:{
-    flex: 1, 
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, 
+  container: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   chatContainer: {
     flex: 1,
@@ -257,7 +355,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   iconButton: {
-    backgroundColor: '#007AFF', // 버튼 색상
+    backgroundColor: '#007AFF',
     borderRadius: 50,
     padding: 10,
     marginLeft: 5,
@@ -305,7 +403,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   inputContainer: {
-    flexDirection: 'row', // 가로로 나란히 배치
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     backgroundColor: '#f2f2f2',
@@ -313,7 +411,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
   input: {
-    flex: 1, // 입력란이 최대한 공간 차지
+    flex: 1,
     height: 40,
     borderColor: 'gray',
     borderWidth: 1,
@@ -321,6 +419,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     backgroundColor: 'white',
   },
-});
-
+}); 
+  
 export default App;
