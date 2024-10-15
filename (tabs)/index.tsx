@@ -125,62 +125,42 @@ const App = () => {
 
   const startRecording = async () => {
     try {
-        console.log('Requesting permissions..');
-        const { status } = await Audio.requestPermissionsAsync();
-        
-        if (status !== 'granted') {
-            console.error('Permission to access microphone was denied');
-            return;
-        }
+      console.log('Requesting permissions..');
+      await Audio.requestPermissionsAsync();
 
-        // Set audio mode to allow recording
-        await Audio.setAudioModeAsync({
-            allowsRecordingIOS: true, // iOS에서 녹음을 허용
-            playsInSilentModeIOS: true, // 무음 모드에서도 재생 허용
-        });
+      console.log('Starting recording..');
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording; // recording을 ref에 저장
+      setIsRecording(true);
+      isStoppedRef.current = false;
 
-        console.log('Starting recording..');
-        const { recording } = await Audio.Recording.createAsync(
-            Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        
-        recordingRef.current = recording; // recording을 ref에 저장
-        setIsRecording(true);
-        isStoppedRef.current = false;
-
-        monitorRecording(recording);
+      monitorRecording(recording);
     } catch (err) {
-        console.error('Failed to start recording', err);
+      console.error('Failed to start recording', err);
     }
-};
-
+  };
 
   const stopRecording = async () => {
     if (isStoppedRef.current) {
       console.log('Recording is already stopped.');
       return;
     }
-  
+
     const currentRecording = recordingRef.current; // 현재 recording을 참조
-  
+
     if (!currentRecording) {
       console.log('Recording does not exist, cannot stop.');
       return;
     }
-  
+
     console.log('Stopping recording..');
     try {
       await currentRecording.stopAndUnloadAsync();
       const uri = currentRecording.getURI();
       console.log('Recording stopped and stored at', uri);
       Alert.alert('녹음 종료', `녹음 파일이 저장되었습니다: ${uri}`);
-  
-      // Check if uri is not null before uploading
-      if (uri) {
-        await uploadAudio(uri);
-      } else {
-        console.error('Recording URI is null. Cannot upload.');
-      }
     } catch (err) {
       console.error('Failed to stop recording', err);
     } finally {
@@ -195,26 +175,26 @@ const App = () => {
       }
     }
   };
-  
+
   const monitorRecording = (recording: Audio.Recording) => {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
     }
-  
+
     const checkSilence = async () => {
       if (isStoppedRef.current) return;
-  
+
       const status = await recording.getStatusAsync();
       if (status.metering !== undefined) {
         console.log(`Current dB: ${status.metering}`);
-  
+
         if (status.metering < SILENCE_THRESHOLD) {
           console.log('Silence detected');
           if (!silenceTimeoutRef.current) {
             console.log('Starting silence timeout...');
             silenceTimeoutRef.current = setTimeout(() => {
               console.log('Silence duration exceeded, attempting to stop recording.');
-  
+
               const currentRecording = recordingRef.current; // 현재 recording을 참조
               if (currentRecording) {
                 stopRecording();
@@ -234,38 +214,9 @@ const App = () => {
         console.warn('Metering is undefined, checking again in next cycle');
       }
     };
-  
+
     const intervalId = setInterval(checkSilence, 100);
     return () => clearInterval(intervalId);
-  };
-  
-  const uploadAudio = async (uri: string) => {
-    const formData = new FormData();
-    
-    // Add audio file to FormData
-    formData.append('file', {
-      uri,
-      name: 'audio.wav',
-      type: 'audio/wav',
-    } as any);
-  
-    try {
-      const uploadResponse = await fetch('http://192.168.0.93:8000/upload/audio', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-  
-      if (uploadResponse.ok) {
-        Alert.alert('Success', 'Audio uploaded successfully.');
-      } else {
-        Alert.alert('Upload Failed', 'Failed to upload audio.');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to upload audio: ' + (error instanceof Error ? error.message : 'An unknown error occurred.'));
-    }
   };
 
   return (
