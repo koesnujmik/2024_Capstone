@@ -1,9 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, StatusBar } from 'react-native';
+import { View, TextInput, Button, Alert, TouchableOpacity, StyleSheet, Text, KeyboardAvoidingView, Platform, ScrollView, StatusBar } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, CameraCapturedPicture } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
 
 const App = () => {
   const [permission, requestPermission] = useCameraPermissions();
@@ -15,20 +14,21 @@ const App = () => {
   const cameraRef = useRef<CameraView | null>(null);
   const [question, setQuestion] = useState('');
   const [chatLog, setChatLog] = useState<{ sender: string, text: string }[]>([]);
-  const [isRecording, setIsRecording] = useState(false); // 녹음 상태 추가
-  const MAX_SILENCE_DURATION = 2000; // 2초
-  const SILENCE_THRESHOLD = -50;
-  const silenceCheckerRef = useRef<NodeJS.Timeout | null>(null);
-  const silenceDurationRef = useRef(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isStoppedRef = useRef(false);
+  const SILENCE_THRESHOLD = -80; // 무음으로 간주할 데시벨 임계값
+  const SILENCE_DURATION = 2000; // 무음 지속 시간 (밀리초)
+
 
   useEffect(() => {
-    // Clean up the silence checker when component is unmounted
     return () => {
-      if (silenceCheckerRef.current) {
-        clearInterval(silenceCheckerRef.current);
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync();
       }
     };
-  }, []); 
+  }, []);
   
 
   if (!permission) {
@@ -107,67 +107,108 @@ const App = () => {
 
   const startRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.granted) {
-        const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      console.log('Requesting permissions..');
+      await Audio.requestPermissionsAsync();
 
-        setRecording(recording);
-        setIsRecording(true);
-        silenceDurationRef.current = 0;
-
-        silenceCheckerRef.current = setInterval(async () => {
-          if (isRecording && recording) {
-            const status = await recording.getStatusAsync();
-            console.log('Metering value:', status.metering);
-
-            if (status.metering !== undefined && status.metering <= SILENCE_THRESHOLD) {
-              // Silence detected
-              silenceDurationRef.current += 100;
-              console.log('Silence duration:', silenceDurationRef.current);
-            } else {
-              // Reset silence duration if sound is detected above threshold
-              silenceDurationRef.current = 0;
-            }
-
-            if (silenceDurationRef.current >= MAX_SILENCE_DURATION) {
-              stopRecording(); // Stop recording after prolonged silence
-            }
-          } else if (silenceCheckerRef.current) {
-            clearInterval(silenceCheckerRef.current); // Stop checking if recording has stopped
-            silenceCheckerRef.current = null;
-          }
-        }, 100);
-      } else {
-        Alert.alert('Permission Denied', 'You need to allow audio recording permission.');
-      }
-    } catch (error) {
-      Alert.alert(
-        'Error',
-        'Failed to start recording: ' + (error instanceof Error ? error.message : 'An unknown error occurred.')
+      console.log('Starting recording..');
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
+      recordingRef.current = recording; // recording을 ref에 저장
+      setIsRecording(true);
+      isStoppedRef.current = false;
+
+      monitorRecording(recording);
+    } catch (err) {
+      console.error('Failed to start recording', err);
     }
   };
 
   const stopRecording = async () => {
-    if (recording && isRecording) {
-      try {
-        setIsRecording(false);
-        if (silenceCheckerRef.current) {
-          clearInterval(silenceCheckerRef.current);
-          silenceCheckerRef.current = null;
-        }
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-        if (uri) {
-          await uploadAudio(uri);
-        } else {
-          Alert.alert('Error', 'Failed to retrieve audio URI.');
-        }
-        setRecording(null);
-      } catch (error) {
-        Alert.alert('Error', 'Failed to stop recording: ' + (error instanceof Error ? error.message : 'An unknown error occurred.'));
+    if (isStoppedRef.current) {
+      console.log('Recording is already stopped.');
+      return;
+    }
+  
+    const currentRecording = recordingRef.current; // 현재 recording을 참조
+  
+    if (!currentRecording) {
+      console.log('Recording does not exist, cannot stop.');
+      return;
+    }
+  
+    console.log('Stopping recording..');
+    try {
+      await currentRecording.stopAndUnloadAsync();
+      const uri = currentRecording.getURI();
+      console.log('Recording stopped and stored at', uri);
+      Alert.alert('녹음 종료', `녹음 파일이 저장되었습니다: ${uri}`);
+  
+      // Check if uri is not null before uploading
+      if (uri) {
+        await uploadAudio(uri);
+      } else {
+        console.error('Recording URI is null. Cannot upload.');
+      }
+  
+    } catch (err) {
+      console.error('Failed to stop recording', err);
+    } finally {
+      // Recording 객체를 null로 설정하고, 중지 상태로 업데이트
+      recordingRef.current = null; // recording을 null로 설정
+      setIsRecording(false);
+      isStoppedRef.current = true; // 중지 상태로 설정
+      // 타이머를 정리합니다.
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
       }
     }
+  };
+  
+  
+
+  const monitorRecording = (recording: Audio.Recording) => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+    }
+
+    const checkSilence = async () => {
+      if (isStoppedRef.current) return;
+
+      const status = await recording.getStatusAsync();
+      if (status.metering !== undefined) {
+        console.log(`Current dB: ${status.metering}`);
+
+        if (status.metering < SILENCE_THRESHOLD) {
+          console.log('Silence detected');
+          if (!silenceTimeoutRef.current) {
+            console.log('Starting silence timeout...');
+            silenceTimeoutRef.current = setTimeout(() => {
+              console.log('Silence duration exceeded, attempting to stop recording.');
+
+              const currentRecording = recordingRef.current; // 현재 recording을 참조
+              if (currentRecording) {
+                stopRecording();
+              } else {
+                console.log('Recording does not exist, skipping stop.');
+              }
+            }, SILENCE_DURATION);
+          }
+        } else {
+          console.log('Sound detected, resetting timer');
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+        }
+      } else {
+        console.warn('Metering is undefined, checking again in next cycle');
+      }
+    };
+
+    const intervalId = setInterval(checkSilence, 100);
+    return () => clearInterval(intervalId);
   };
 
   const uploadAudio = async (uri: string) => {
