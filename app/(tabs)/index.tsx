@@ -84,6 +84,7 @@ const App = () => {
 
   const sendQuestion = async () => {
     if (!question.trim()) return;
+
     setChatLog(prevChatLog => [...prevChatLog, { sender: 'user', text: question }]);
     try {
       const response = await fetch('http://ip:8000/ask', {
@@ -92,9 +93,17 @@ const App = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          question: question,
+          text: question
         }),
       });
+
+      // 응답이 성공인지 확인
+      if (!response.ok) {
+          const errorText = await response.text();
+          console.error('HTTP error:', response.status, errorText);
+          setChatLog(prevChatLog => [...prevChatLog, { sender: 'bot', text: 'Error: ' + errorText }]);
+          return;
+    }
 
       const data = await response.json();
       setChatLog(prevChatLog => [...prevChatLog, { sender: 'bot', text: data.answer }]);
@@ -104,6 +113,7 @@ const App = () => {
     }
     setQuestion('');
   };
+
 
   const startRecording = async () => {
     try {
