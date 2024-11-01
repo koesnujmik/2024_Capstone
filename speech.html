@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech Recognition</title>
+</head>
+<body>
+  <h1>AI 호출을 위해 음성을 말씀하세요</h1>
+  <button onclick="startListening()">Start Listening</button>
+  <p id="result">...</p>
+
+  <script>
+    const resultElement = document.getElementById('result');
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    
+    recognition.lang = 'ko-KR';  // 한국어 설정
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const spokenText = event.results[0][0].transcript;
+      resultElement.textContent = `You said: ${spokenText}`;
+
+      // "AI"라는 단어가 포함되면 앱으로 결과 전송
+      if (spokenText.toLowerCase().includes('ai')) {
+        window.location.href = `myapp://?text=${encodeURIComponent(spokenText)}`;
+      }
+    };
+
+    function startListening() {
+      recognition.start();
+    }
+  </script>
+</body>
+</html>
