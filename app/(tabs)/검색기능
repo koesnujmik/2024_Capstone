@@ -1,0 +1,70 @@
+import React, { useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  TextInput,
+  Image
+} from 'react-native';
+import { recipes } from './recipes'; // Adjust the path if necessary
+
+export default function App() {
+  const [query, setQuery] = useState('');
+  const [filteredData, setFilteredData] = useState(recipes);
+
+  const handleSearch = (text: string) => {
+    const formattedQuery = text.toLowerCase();
+    const filtered = recipes.filter(recipe => 
+      recipe.name.toLowerCase().includes(formattedQuery)
+    );
+    setFilteredData(filtered);
+    setQuery(text);
+  };
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={query}
+        onChangeText={handleSearch}
+        placeholder="Search"
+        style={styles.searchInput}
+      />
+      <FlatList
+        data={filteredData}
+        keyExtractor={(item) => item.name}
+        renderItem={({ item }) => (
+          <Image
+            source={{ uri: item.image[0] }} // Display the first image
+            style={styles.coverImage}
+          />
+        )}
+        numColumns={2} // Display images in two columns
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f8f8',
+    alignItems: 'center',
+    padding: 10,
+  },
+  searchInput: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+    width: '100%',
+  },
+  coverImage: {
+    width: '45%', // Adjusted to fit in two columns
+    height: 100,
+    borderRadius: 8,
+    margin: 5, // Adds space between images
+  },
+});

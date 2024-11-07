@@ -1,0 +1,1 @@
+npm install expo -> expo 앱이 있는 폴더에서 설치
