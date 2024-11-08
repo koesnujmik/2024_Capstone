@@ -1,14 +1,24 @@
 // app/RecipeListScreen.tsx
-import React, { useState } from 'react';
-import { View, FlatList, Image, TouchableOpacity, StyleSheet, TextInput, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, FlatList, Image, TouchableOpacity, StyleSheet, TextInput, Text, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { recipes } from '../../data/recipes';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 const RecipeListScreen = () => {
     const router = useRouter();
     const [searchTerm, setSearchTerm] = useState('');
 
-    // 검색 결과 필터링
+    useEffect(() => {
+        const lockOrientation = async () => {
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+        };
+        lockOrientation();
+        return () => {
+          ScreenOrientation.unlockAsync();
+        };
+    }, []);
+
     const filteredRecipes = recipes.filter(recipe =>
         recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -17,7 +27,8 @@ const RecipeListScreen = () => {
         <View style={styles.container}>
             <TextInput
                 style={styles.searchBar}
-                placeholder="검색어를 입력하세요"
+                placeholder="요리, 재료를 검색해주세요."
+                placeholderTextColor="#333"
                 value={searchTerm}
                 onChangeText={setSearchTerm}
             />
@@ -25,18 +36,18 @@ const RecipeListScreen = () => {
                 data={filteredRecipes}
                 numColumns={2}
                 keyExtractor={(item, index) => index.toString()}
-                renderItem={({ item, index }) => (
+                renderItem={({ item }) => (
                     <TouchableOpacity
                         onPress={() => router.push({ pathname: '/(tabs)/RecipeScreen', params: { index: recipes.indexOf(item).toString() } })}
                         style={styles.itemContainer}
                     >
                         <Image source={{ uri: item.image[0] }} style={styles.image} />
-                        {/* 이름을 뒤에서 10글자로 제한 */}
-                        <Text style={styles.recipeName}>
-                            {item.name.length > 10 ? `...${item.name.slice(-10)}` : item.name}
+                        <Text style={styles.recipeName} numberOfLines={2} ellipsizeMode="tail">
+                            {item.name}
                         </Text>
                     </TouchableOpacity>
                 )}
+                contentContainerStyle={styles.listContainer}
             />
         </View>
     );
@@ -45,31 +56,48 @@ const RecipeListScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        padding: 10,
+        paddingTop: 40,
+        paddingHorizontal: 10,
         backgroundColor: '#fff',
     },
     searchBar: {
         height: 40,
-        borderColor: '#ccc',
+        borderColor: '#888',
         borderWidth: 1,
-        borderRadius: 5,
-        paddingHorizontal: 10,
-        marginBottom: 10,
+        borderRadius: 25,
+        paddingHorizontal: 15,
+        marginBottom: 20,
+        fontSize: 15,
+        backgroundColor: '#f2f2f2',
     },
     itemContainer: {
-        alignItems: 'center', // 수평 중앙 정렬
+        flex: 1,
         margin: 5,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 3,
+        paddingVertical: 10,
+        alignItems: 'center',
     },
     image: {
-        width: 150,
-        height: 150,
+        width: Dimensions.get('window').width / 2 - 30,
+        height: 120,
         borderRadius: 10,
     },
     recipeName: {
-        marginTop: 5, // 이미지와 이름 간의 여백
-        textAlign: 'center', // 텍스트 중앙 정렬
-        fontSize: 16,
+        marginTop: 8,
+        textAlign: 'center', 
+        fontSize: 14,
         fontWeight: 'bold',
+        color: '#333',
+        flexWrap: 'wrap',
+    },
+    listContainer: {
+        paddingHorizontal: 10,
     },
 });
 
