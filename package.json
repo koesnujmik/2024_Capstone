@@ -10,8 +10,13 @@
     "test": "jest"
   },
   "dependencies": {
+    "@expo/vector-icons": "^14.0.4",
+    "@picovoice/porcupine-react-native": "^3.0.3",
+    "@picovoice/react-native-voice-processor": "^1.2.3",
+    "expo-av": "^15.0.1",
     "react": "18.3.1",
-    "react-native": "0.76.3"
+    "react-native": "0.76.3",
+    "react-native-permissions": "^5.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

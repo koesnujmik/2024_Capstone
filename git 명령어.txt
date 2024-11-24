@@ -1,0 +1,27 @@
+git init
+git add .
+git status -> 상태 확인
+git commit -m "메시지"
+
+
+
+git branch 브랜치명 -> 브랜치 생성
+git branch -D 브랜치 -> 브랜치 삭제
+git branch -m 브랜치명 새로운 브랜치명 -> 브랜치 명 바꾸기
+git checkout 브랜치 -> 브랜치 이동
+git branch -v -> 브랜치 확인
+
+git remote add origin github주소 -> 연결
+git remote -v ->확인
+
+git push origin 브랜치 명
+
+
+추가할 때
+git add .
+git commit -m "메시지"
+git push origin 브랜치 명
+
+
+rm -r .git -> init 지우기
+rm -rf .git

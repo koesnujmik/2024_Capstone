@@ -1,0 +1,4 @@
+cmake 
+gradle
+
+npx expo run:android
