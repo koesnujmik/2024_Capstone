@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import WakeWordScreen from "./Pico"; // Adjust path based on your project structure
 
 type CookModeProps = {
   recipeName: string;
@@ -10,39 +11,42 @@ type CookModeProps = {
 };
 
 const CookMode: React.FC<CookModeProps> = ({ recipeName, ingredients, instructions, onClose, startFromWakeWord }) => {
-  const [currentStep, setCurrentStep] = useState(0);  // 현재 요리 단계
+  const [currentStep, setCurrentStep] = useState(0);  // Current cooking step
 
-  // 레시피 단계 진행 (다음 단계)
+  // Move to next step if possible
   const handleNextStep = () => {
+    console.log(`handleNextStep called. Current Step: ${currentStep}`);
     if (currentStep < instructions.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
 
-  // 레시피 단계 되돌리기 (이전 단계)
+  // Move to previous step if possible
   const handlePreviousStep = () => {
+    console.log(`handlePreviousStep called. Current Step: ${currentStep}`);
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     }
   };
 
-  // If started from wake word, directly go to the next step
-  React.useEffect(() => {
-    if (startFromWakeWord) {
+  // If the wake word is detected, move to the next step only if it's not the last step
+  useEffect(() => {
+    console.log(`useEffect triggered. startFromWakeWord: ${startFromWakeWord}, Current Step: ${currentStep}`);
+    if (startFromWakeWord && currentStep < instructions.length - 1) {
       handleNextStep();
     }
-  }, [startFromWakeWord]);
+  }, [startFromWakeWord, currentStep, instructions.length]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.recipeName}>{recipeName}</Text>
-      <Text>단계 {currentStep + 1}: {instructions[currentStep]?.text}</Text>
+      <Text>Step {currentStep + 1}: {instructions[currentStep]?.text}</Text>
 
       {instructions[currentStep]?.image && (
         <Image source={{ uri: instructions[currentStep].image }} style={styles.image} />
       )}
 
-      {/* 요리 단계 조작 버튼 */}
+      {/* Cooking step controls */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.button} onPress={handlePreviousStep} disabled={currentStep === 0}>
           <Text style={styles.buttonText}>이전 단계</Text>
@@ -53,7 +57,10 @@ const CookMode: React.FC<CookModeProps> = ({ recipeName, ingredients, instructio
         </TouchableOpacity>
       </View>
 
-      {/* 종료 버튼 */}
+      {/* Wake Word detection */}
+      <WakeWordScreen onWakeWordDetected={handleNextStep} /> 
+
+      {/* Close button */}
       <TouchableOpacity onPress={onClose} style={styles.button}>
         <Text style={styles.buttonText}>종료</Text>
       </TouchableOpacity>

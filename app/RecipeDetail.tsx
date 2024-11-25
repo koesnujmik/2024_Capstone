@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, ScrollView, Button } from 'react-native';
 import CookMode from './CookMode';
-import  WakeWordScreen from './pico';  // Make sure to import the WakeWordScreen
 
 
 type RecipeDetailProps = {
@@ -25,18 +24,7 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe }) => {
     setShowCookMode(false);
   };
 
-  const handleWakeWordDetected = () => {
-    setStartFromWakeWord(true);
-    setShowCookMode(true);  // Automatically start cooking mode when wake word is detected
-  };
 
-  useEffect(() => {
-    // Handle the start of cooking from the wake word detection
-    if (startFromWakeWord) {
-      // Logic to ensure the wake word triggered the cooking mode.
-      // Optionally, you could pass any wake word-related data to CookMode here.
-    }
-  }, [startFromWakeWord]);
 
 
   if (showCookMode) {
@@ -71,8 +59,6 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe }) => {
       <View style={styles.buttonContainer}>
         <Button title="요리하기" onPress={handleStartCooking} color="#ff6347" />
       </View>
-      {/* Include the WakeWordScreen here to listen for the keyword */}
-      <WakeWordScreen onWakeWordDetected={handleWakeWordDetected} />
     </ScrollView>
   );
 };

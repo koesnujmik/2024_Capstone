@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Alert, Platform } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Alert, Platform } from "react-native";
 import { PorcupineManager } from "@picovoice/porcupine-react-native";
 import { check, request, PERMISSIONS, RESULTS } from "react-native-permissions"; // 권한 요청
 
@@ -8,12 +8,10 @@ type WakeWordScreenProps = {
 };
 
 const WakeWordScreen: React.FC<WakeWordScreenProps> = ({ onWakeWordDetected }) => {
-  const [message, setMessage] = useState(""); // 화면에 표시될 메시지 상태
   const accessKey = "JpFUWjMA4/HwbCr8dcB//n9/rcjsgb4fstZyd089hFvlF0SPM8+Dvw=="; // Porcupine Access Key
+  const porcupineManagerRef = useRef<PorcupineManager | null>(null); // Using useRef to persist the instance
 
   useEffect(() => {
-    let porcupineManager: PorcupineManager | null = null;
-
     // 마이크 권한 요청 함수
     const requestAudioPermission = async () => {
       try {
@@ -37,12 +35,11 @@ const WakeWordScreen: React.FC<WakeWordScreenProps> = ({ onWakeWordDetected }) =
     // Porcupine 초기화
     const initializePorcupine = async () => {
       try {
-        porcupineManager = await PorcupineManager.fromKeywordPaths(
+        porcupineManagerRef.current = await PorcupineManager.fromKeywordPaths(
           accessKey,
           ["쿠키야_ko_android_v3_0_0.ppn"], // '쿠키야' 키워드 파일 경로
           () => {
             console.log("쿠키야 detected!");
-            setMessage("안녕");
             onWakeWordDetected(); // Trigger the callback function
           },
           (error) => {
@@ -52,7 +49,7 @@ const WakeWordScreen: React.FC<WakeWordScreenProps> = ({ onWakeWordDetected }) =
         );
 
         // Wake Word 감지 시작
-        const didStart = await porcupineManager.start();
+        const didStart = await porcupineManagerRef.current.start();
         console.log("Porcupine started:", didStart);
       } catch (error) {
         console.error("Failed to initialize Porcupine:", error);
@@ -64,31 +61,14 @@ const WakeWordScreen: React.FC<WakeWordScreenProps> = ({ onWakeWordDetected }) =
 
     // 컴포넌트 언마운트 시 리소스 해제
     return () => {
-      if (porcupineManager) {
-        porcupineManager.stop();
-        porcupineManager.delete();
+      if (porcupineManagerRef.current) {
+        porcupineManagerRef.current.stop();
+        porcupineManagerRef.current.delete();
       }
     };
-  }, []);
+  }, [onWakeWordDetected]); // Dependency on onWakeWordDetected to avoid unnecessary effect executions
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.message}>{message}</Text>
-    </View>
-  );
+  return <View />;
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-  },
-  message: {
-    fontSize: 24,
-    color: "#333",
-  },
-});
 
 export default WakeWordScreen;
