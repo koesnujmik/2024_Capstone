@@ -1,0 +1,12 @@
+npm install
+
+gradle.properties에서 맨 윗 줄 org.gradle.java.home=C:/Program Files/Java/자신의 컴퓨터에 설치된 java version 고치기
+
+에러시:
+
+rmdir /s /q android\.gradle
+rmdir /s /q android\build
+
+npm install typescript@latest --save-dev
+
+npx react-native run-android
