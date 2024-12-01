@@ -10,6 +10,7 @@ import CustomText from './CustomText';
 type CookModeProps = {
   onClose: () => void;
   onTriggerCookMode: () => void;
+  recipeimage: string[];
   recipeName: string;
   ingredients: string[];
   instructions: { "@type": string; text: string; image?: string }[];
@@ -18,6 +19,7 @@ type CookModeProps = {
 
 const CookMode: React.FC<CookModeProps> = ({
   onClose,
+  recipeimage,
   recipeName,
   ingredients,
   instructions,
@@ -218,7 +220,7 @@ const CookMode: React.FC<CookModeProps> = ({
           <View style={styles.cookCompleteContainer}>
             <CustomText style={styles.completeText}>요리를 완성하였습니다!</CustomText>
             <Image
-              source={{ uri: instructions[instructions.length - 1]?.image }}
+              source={{ uri: recipeimage[1] }}
               style={styles.completeImage}
             />
             <TouchableOpacity style={styles.homeButton} onPress={handleCloseCookMode}>
