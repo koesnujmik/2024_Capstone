@@ -35,6 +35,7 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack }) => {
       <CookMode
         onClose={handleCloseCamera}
         onTriggerCookMode={handleTriggerCookMode}
+        recipeimage={recipe.image}
         recipeName={recipe.name}
         ingredients={recipe.recipeIngredient}
         instructions={recipe.recipeInstructions}
@@ -52,7 +53,7 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack }) => {
 
       {/* ScrollView 내부 컨텐츠 */}
       <ScrollView style={styles.content}>
-        <Image source={{ uri: recipe.image[0] }} style={styles.image} />
+        <Image source={{ uri: recipe.image[1] }} style={styles.image} />
         <CustomText style={styles.recipeName}>{recipe.name}</CustomText>
         <CustomText style={styles.sectionTitle}>재료</CustomText>
         {recipe.recipeIngredient.map((ingredient, index) => (
