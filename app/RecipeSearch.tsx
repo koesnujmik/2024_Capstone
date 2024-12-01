@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, TextInput, FlatList, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { recipes } from '../data/recipes';
+import CustomText from './CustomText';
 
 type Recipe = typeof recipes[0];
 
@@ -25,8 +26,8 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onRecipeSelect }) => {
   const renderRecipe = ({ item }: { item: Recipe }) => (
     <TouchableOpacity onPress={() => onRecipeSelect(item)} style={styles.recipeContainer}>
       <Image source={{ uri: item.image[0] }} style={styles.image} />
-      <Text style={styles.recipeName}>{item.name}</Text>
-      <Text style={styles.ingredients}>{item.recipeIngredient.join(', ')}</Text>
+      <CustomText style={styles.recipeName}>{item.name}</CustomText>
+      <CustomText style={styles.ingredients}>{item.recipeIngredient.join(', ')}</CustomText>
     </TouchableOpacity>
   );
 
@@ -37,7 +38,7 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onRecipeSelect }) => {
         placeholder="요리, 재료를 검색해주세요."
         value={searchQuery}
         onChangeText={handleSearch}
-      />
+      /> 
       <FlatList
         data={filteredRecipes}
         keyExtractor={(item, index) => index.toString()}
@@ -50,17 +51,21 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onRecipeSelect }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 50,
+    paddingTop: 10,
     paddingHorizontal: 20,
+    backgroundColor: '#FFF8EB'
   },
   searchBar: {
     height: 40,
-    borderColor: '#ccc',
+    borderColor: '#ddd',
     borderWidth: 1,
-    borderRadius: 5,
+    borderRadius: 10, // 모서리를 둥글게
+    backgroundColor: '#FFFFFF', // 검색창 배경을 흰색으로
     paddingHorizontal: 10,
     marginBottom: 20,
+    elevation: 3, // 그림자를 추가해 입체감
   },
+  
   recipeContainer: {
     marginBottom: 20,
     borderBottomWidth: 1,
@@ -69,7 +74,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 150,
+    height: 200,
     borderRadius: 5,
   },
   recipeName: {

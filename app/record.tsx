@@ -3,13 +3,15 @@ import { Alert, Platform } from "react-native";
 import { PorcupineManager } from "@picovoice/porcupine-react-native";
 import AudioRecorderPlayer from "react-native-audio-recorder-player";
 import { request, PERMISSIONS, RESULTS } from "react-native-permissions";
+import RNFS from "react-native-fs";
 
 const Record: React.FC = () => {
-  const accessKey = "JpFUWjMA4/HwbCr8dcB//n9/rcjsgb4fstZyd089hFvlF0SPM8+Dvw=="; // Porcupine Access Key
+  const accessKey = "JpFUWjMA4/HwbCr8dcB//n9/rcjsgb4fstZyd089hFvlF0SPM8+Dvw=="; // Replace with your actual key
   const porcupineManagerRef = useRef<PorcupineManager | null>(null);
   const audioRecorderPlayer = useRef(new AudioRecorderPlayer()).current;
   const [isRecording, setIsRecording] = useState(false);
   const stopTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isRecordingRef = useRef(false);
 
   useEffect(() => {
     const requestAudioPermission = async () => {
@@ -70,48 +72,92 @@ const Record: React.FC = () => {
   }, []);
 
   const startRecording = async () => {
-    if (isRecording) {
+    const path = `${RNFS.DocumentDirectoryPath}/record_${Date.now()}.m4a`;
+    console.log("Recording path:", path);
+  
+    if (isRecordingRef.current) {
       console.warn("Recording already in progress. Ignoring startRecording.");
       return;
     }
-
+  
     try {
-      console.log("Start Recording");
-      await audioRecorderPlayer.startRecorder();
-
-      setIsRecording(true); // Update state to reflect recording status
-      console.log("Recording started successfully.");
-
-      // Automatically stop recording after 6 seconds
-      stopTimeout.current = setTimeout(() => {
-        console.log("Auto-stopping recording after 6 seconds...");
-        stopRecording();
-      }, 6000);
+      console.log("Initializing recording...");
+      const result = await audioRecorderPlayer.startRecorder(path);
+  
+      if (result) {
+        console.log("Recorder started successfully at:", result);
+        isRecordingRef.current = true;
+        setIsRecording(true);
+  
+        stopTimeout.current = setTimeout(() => {
+          console.log("Auto-stopping recording after 6 seconds...");
+          if (isRecordingRef.current) {
+            stopRecording();
+          }
+        }, 6000);
+      } else {
+        console.error("Recorder failed to start.");
+      }
     } catch (error) {
       console.error("Failed to start recording:", error);
     }
   };
 
   const stopRecording = async () => {
-    if (!isRecording) {
+    if (!isRecordingRef.current) {
       console.warn("No recording in progress. Ignoring stopRecording.");
       return;
     }
 
     try {
-      console.log("Stop Recording");
-      await audioRecorderPlayer.stopRecorder();
-      audioRecorderPlayer.removeRecordBackListener(); // Clean up listener
-
-      setIsRecording(false); // Reset state
+      console.log("Stopping recording...");
+      const result = await audioRecorderPlayer.stopRecorder();
+  
+      if (result) {
+        console.log("Recording stopped. File saved to:", result);
+  
+        // Upload the recording to FastAPI server
+        await uploadAudio(result);
+      } else {
+        console.error("Failed to stop recording. No result returned.");
+      }
+    } catch (error) {
+      console.error("Error while stopping recording:", error);
+    } finally {
+      isRecordingRef.current = false;
+      setIsRecording(false);
       if (stopTimeout.current) {
-        clearTimeout(stopTimeout.current); // Clear timeout
+        clearTimeout(stopTimeout.current);
         stopTimeout.current = null;
       }
+    }
+  };
 
-      console.log("Recording stopped successfully.");
+  const uploadAudio = async (filePath: string) => {
+    try {
+      const fileName = filePath.split("/").pop();
+  
+      const formData = new FormData();
+      formData.append("file", {
+        uri: `file://${filePath}`,
+        name: fileName || "recorded_audio.m4a",
+        type: "audio/m4a",
+      });
+  
+      const response = await fetch("http://192.168.0.93:8000/upload/", {
+        method: "POST",
+        body: formData,
+      });
+  
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Audio uploaded successfully:", data);
+      } else {
+        const errorText = await response.text();
+        console.error("Failed to upload audio:", response.status, errorText);
+      }
     } catch (error) {
-      console.error("Failed to stop recording:", error);
+      console.error("Error uploading audio:", error);
     }
   };
 

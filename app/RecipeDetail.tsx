@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, Button } from 'react-native';
+import { View, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import CookMode from './CookMode';
+import CustomText from './CustomText';
 
 type RecipeDetailProps = {
   recipe: {
@@ -26,7 +27,6 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack }) => {
 
   const handleTriggerCookMode = () => {
     console.log('Cook Mode Triggered!');
-    // 요리 모드로 전환하는 동작 추가 가능
   };
 
   // 카메라 화면 렌더링
@@ -37,38 +37,72 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack }) => {
         onTriggerCookMode={handleTriggerCookMode}
         recipeName={recipe.name}
         ingredients={recipe.recipeIngredient}
-        instructions={recipe.recipeInstructions} startFromWakeWord={false}      />
+        instructions={recipe.recipeInstructions}
+        startFromWakeWord={false} 
+         />
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Image source={{ uri: recipe.image[0] }} style={styles.image} />
-      <Text style={styles.recipeName}>{recipe.name}</Text>
-      <Text style={styles.sectionTitle}>재료</Text>
-      {recipe.recipeIngredient.map((ingredient, index) => (
-        <Text key={index} style={styles.ingredient}>{ingredient}</Text>
-      ))}
-      <Text style={styles.sectionTitle}>조리 과정</Text>
-      {recipe.recipeInstructions.map((step, index) => (
-        <View key={index} style={styles.stepContainer}>
-          <Text style={styles.stepText}>{index + 1}. {step.text}</Text>
-          {step.image && (
-            <Image source={{ uri: step.image }} style={styles.stepImage} />
-          )}
+    <View style={styles.container}>
+      {/* 항상 보이는 뒤로가기 버튼 */}
+      <TouchableOpacity style={styles.backButton} onPress={onBack}>
+        <CustomText style={styles.backButtonText}> ← </CustomText>
+      </TouchableOpacity>
+
+      {/* ScrollView 내부 컨텐츠 */}
+      <ScrollView style={styles.content}>
+        <Image source={{ uri: recipe.image[0] }} style={styles.image} />
+        <CustomText style={styles.recipeName}>{recipe.name}</CustomText>
+        <CustomText style={styles.sectionTitle}>재료</CustomText>
+        {recipe.recipeIngredient.map((ingredient, index) => (
+          <CustomText key={index} style={styles.ingredient}>
+            - {ingredient}
+          </CustomText>
+        ))}
+        <CustomText style={styles.sectionTitle}>조리 과정</CustomText>
+        {recipe.recipeInstructions.map((step, index) => (
+          <View key={index} style={styles.stepContainer}>
+            <CustomText style={styles.stepText}>
+              {index + 1}. {step.text}
+            </CustomText>
+            {step.image && (
+              <Image source={{ uri: step.image }} style={styles.stepImage} />
+            )}
+          </View>
+        ))}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.cookButton} onPress={handleStartCooking}>
+            <CustomText style={styles.cookButtonText}>요리하기</CustomText>
+          </TouchableOpacity>
         </View>
-      ))}
-      <View style={styles.buttonContainer}>
-        <Button title="요리하기" onPress={handleStartCooking} color="#ff6347" />
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#FFF8EB', // 밝은 배경색
+  },
+  backButton: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 10,
+    padding: 8,
+    borderRadius: 5,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#5A5A5A',
+  },
+  content: {
+    flex: 1,
+    marginTop: 50, // 뒤로가기 버튼 아래로 컨텐츠 이동
+    padding: 10,
   },
   image: {
     width: '100%',
@@ -77,36 +111,63 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   recipeName: {
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: 'bold',
+    color: '#3B3B3B',
+    textAlign: 'center',
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginVertical: 10,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#444444',
+    marginVertical: 12,
   },
   ingredient: {
     fontSize: 16,
-    color: '#555',
-    marginBottom: 5,
+    color: '#5A5A5A',
+    lineHeight: 22,
+    marginBottom: 8,
   },
   stepContainer: {
-    marginVertical: 8,
+    marginVertical: 10,
+    padding: 10,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   stepText: {
     fontSize: 16,
-    marginBottom: 5,
+    color: '#3B3B3B',
+    lineHeight: 24,
   },
   stepImage: {
     width: '100%',
-    height: 150,
+    height: 200,
     borderRadius: 8,
-    marginTop: 5,
+    marginTop: 10,
   },
   buttonContainer: {
-    marginVertical: 20,
+    marginTop: 10,
     paddingHorizontal: 40,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  cookButton: {
+    backgroundColor: '#008009', // 짙은 녹색
+    paddingVertical: 14,
+    paddingHorizontal: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+  },
+  cookButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PermissionsAndroid, View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { PermissionsAndroid, View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView } from 'react-native';
 import { Camera, useCameraDevice, PhotoFile } from 'react-native-vision-camera';
 import NextStepWord from './NextStepWord'; // WakeWordScreen import
 import RNFS from 'react-native-fs'; // 파일 시스템 모듈
 import WakeWordScreen from './WakeWord';
 import Record from './record';
+import CustomText from './CustomText';
 
 type CookModeProps = {
   onClose: () => void;
@@ -28,6 +29,7 @@ const CookMode: React.FC<CookModeProps> = ({
   const device = useCameraDevice('back');
   const [isCookMode, setIsCookMode] = useState(false); // CookMode 활성화 상태
   const cameraRef = useRef<Camera>(null); // 카메라 참조 생성
+  const [isCookComplete, setIsCookComplete] = useState(false); // 요리 완성 상태
 
   useEffect(() => {
     (async () => {
@@ -46,13 +48,14 @@ const CookMode: React.FC<CookModeProps> = ({
       }
     })();
 
-    if (startFromWakeWord && currentStep < instructions.length - 1) {
+    if (startFromWakeWord && currentStep <= instructions.length) {
       handleNextStep();
     }
   }, [startFromWakeWord, currentStep, instructions.length]);
 
   const requestAudioPermission = async () => {
     try {
+
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
         {
@@ -151,24 +154,24 @@ const CookMode: React.FC<CookModeProps> = ({
       console.error('Network request failed:', error);
     }
   };
-
-  const handleRecordingComplete = (filePath: string) => {
-    console.log("Recording completed. File saved at:", filePath);
-    // 추가 작업: 파일 업로드 또는 저장 경로 처리
-  };
-
   // Move to next step if possible
   const handleNextStep = () => {
-    if (currentStep < instructions.length - 1) {
+    if (currentStep < instructions.length) {
       setCurrentStep(currentStep + 1);
+    } else {
+      setIsCookComplete(true); // 마지막 단계 이후 요리 완성 상태로 전환
     }
   };
 
   // Move to previous step if possible
   const handlePreviousStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
+    if (currentStep > 0) setCurrentStep(currentStep - 1);
+  };
+
+  const handleCloseCookMode = () => {
+    setCurrentStep(0);
+    setIsCookComplete(false);
+    onClose(); 
   };
 
   const handleWakeWordDetected = () => {
@@ -180,7 +183,7 @@ const CookMode: React.FC<CookModeProps> = ({
   if (!hasPermission) {
     return (
       <View style={styles.container}>
-        <Text>Camera permissions are not granted.</Text>
+        <CustomText>Camera permissions are not granted.</CustomText>
       </View>
     );
   }
@@ -188,14 +191,14 @@ const CookMode: React.FC<CookModeProps> = ({
   if (!device) {
     return (
       <View style={styles.container}>
-        <Text>Loading camera...</Text>
+        <CustomText>Loading camera...</CustomText>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-    {/* Camera component always mounted but visibility managed */}
+      {/* Camera component always mounted but visibility managed */}
       <Camera
         style={!isCookMode ? StyleSheet.absoluteFill : { width: 0, height: 0 }}
         device={device}
@@ -205,52 +208,66 @@ const CookMode: React.FC<CookModeProps> = ({
         onInitialized={() => console.log('Camera initialized')}
         onError={(error) => console.error('Camera error:', error)}
       />
-
-      {!isCookMode ? (
-        <>
-          <Text style={styles.adjustmentText}>카메라 화면을 조정해주세요</Text>
-
-          <NextStepWord onNextStepWordDetected={handleWakeWordDetected} />
-
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.buttonText}>Close</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <View style={styles.cookModeContainer}>
-          {/* Recipe Name */}
-          <Text style={styles.recipeName}>{recipeName}</Text>
-
-        {/* Current Step */}
-        <Text style={styles.stepText}>
-          Step {currentStep + 1}: {instructions[currentStep]?.text}
-        </Text>
-
-        {/* Current Step Image */}
-        {instructions[currentStep]?.image && (
-          <Image source={{ uri: instructions[currentStep].image }} style={styles.image} />
-        )}
-
-        {/* Cooking Step Controls */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, currentStep === 0 && styles.disabledButton]}
-            onPress={handlePreviousStep}
-            disabled={currentStep === 0}
-          >
-            <Text style={styles.buttonText}>이전 단계</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, currentStep === instructions.length - 1 && styles.disabledButton]}
-            onPress={handleNextStep}
-            disabled={currentStep === instructions.length - 1}
-          >
-            <Text style={styles.buttonText}>다음 단계</Text>
-          </TouchableOpacity>
+  
+      <TouchableOpacity style={styles.backButton} onPress={onClose}>
+        <CustomText style={styles.backButtonText}> ← </CustomText>
+      </TouchableOpacity>
+  
+      {isCookMode ? (
+        isCookComplete ? (
+          <View style={styles.cookCompleteContainer}>
+            <CustomText style={styles.completeText}>요리를 완성하였습니다!</CustomText>
+            <Image
+              source={{ uri: instructions[instructions.length - 1]?.image }}
+              style={styles.completeImage}
+            />
+            <TouchableOpacity style={styles.homeButton} onPress={handleCloseCookMode}>
+              <CustomText style={styles.homeButtonText}>홈으로 돌아가기</CustomText>
+            </TouchableOpacity>
           </View>
-
-          {/* Wake Word Detection */}
+        ) : (
+          <View style={styles.cookModeContainer}>
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+              {currentStep === 0 ? (
+                <>
+                  <CustomText style={styles.sectionTitle}>재료</CustomText>
+                  <CustomText style={styles.ingredients}>
+                    {ingredients.join('\n')}
+                  </CustomText>
+                </>
+              ) : (
+                <>
+                  <CustomText style={styles.stepText}>
+                    {`단계 ${currentStep}: ${instructions[currentStep - 1]?.text}`}
+                  </CustomText>
+                  {instructions[currentStep - 1]?.image && (
+                    <Image
+                      source={{ uri: instructions[currentStep - 1]?.image }}
+                      style={styles.image}
+                    />
+                  )}
+                </>
+              )}
+            </ScrollView>
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, currentStep === 0 && styles.disabledButton]}
+                onPress={handlePreviousStep}
+                disabled={currentStep === 0}
+              >
+                <CustomText style={styles.buttonText}>이전 단계</CustomText>
+              </TouchableOpacity>
+              {currentStep === instructions.length ? (
+                <TouchableOpacity style={styles.button} onPress={handleNextStep}>
+                  <CustomText style={styles.buttonText}>완성</CustomText>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.button} onPress={handleNextStep}>
+                  <CustomText style={styles.buttonText}>다음 단계</CustomText>
+                </TouchableOpacity>
+              )}
+            </View>
+            {/* Wake Word Detection */}
           <NextStepWord
             onNextStepWordDetected={() => {
               console.log("NextStep word detected!");
@@ -265,81 +282,154 @@ const CookMode: React.FC<CookModeProps> = ({
             }}
           />
 
-          <TouchableOpacity style={styles.closeButton} onPress={() => setIsCookMode(false)}>
-            <Text style={styles.buttonText}>카메라로 돌아가기</Text>
-          </TouchableOpacity>
+          <Record/>
+          </View>
+        )
+      ) : (
+        <View style={styles.cameraModeContainer}>
+          <CustomText style={styles.adjustmentText}>카메라 화면을 조정해주세요</CustomText>
+          <NextStepWord onNextStepWordDetected={handleWakeWordDetected} />
         </View>
       )}
-      <Record />
     </View>
   );
-};
+}; 
+  
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: '#FFF8EB',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 10,
+    padding: 8,
+
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#3B3B3B',
+    textAlign: 'center',
+    marginBottom: 8,
+    marginTop: 10
+  },
+  ingredients: {
+    fontSize: 16,
+    color: '#5A5A5A',
+    lineHeight: 24,
+    textAlign: 'center',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingBottom: 100, // 버튼과 간격 확보
+  },
+  backButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'black',
+  },
+  cameraModeContainer: {
+    position: 'absolute', // 위치 고정
+    top: 0, 
+    alignSelf: 'center', // 수평 가운데 정렬
+    padding: 16,
   },
   adjustmentText: {
-    position: 'absolute',
-    top: 20,
-    alignSelf: 'center',
-    color: 'white',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    zIndex: 10,
-  },
-  closeButton: {
-    position: 'absolute',
-    bottom: 20,
-    alignSelf: 'center',
-    backgroundColor: '#ff6347',
-    padding: 10,
-    borderRadius: 5,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
+    color: '#3B3B3B',
+    marginBottom: 20,
   },
   cookModeContainer: {
+    flex: 1,
+    justifyContent: 'flex-start', // 위쪽부터 시작
+    alignItems: 'center',
+    padding: 15,
+  },
+  stepText: {
+    fontSize: 18,
+    fontWeight: 'regular',
+    color: '#3B3B3B',
+    textAlign: 'center',
+    marginVertical: 0,
+  },
+  image: {
+    width: '50%', // 화면 너비의 90%로 확대
+    height: undefined, // 비율 유지
+    aspectRatio: 16 / 9, // 가로 비율을 더 길게 조정
+    resizeMode: 'contain', // 잘리지 않게 유지
+    alignSelf: 'center', // 가운데 정렬
+    marginVertical: 10, // 상하 간격 추가
+  },
+  
+  buttonContainer: {
+    position: 'absolute', // 버튼을 화면 하단에 고정
+    bottom: 10,
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 10,
+  },
+  button: {
+    flex: 1,
+    marginHorizontal: 10,
+    padding: 10,
+    backgroundColor: '#008009',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  disabledButton: {
+    backgroundColor: '#CCC',
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF6347',
+  },
+  cookCompleteContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  recipeName: {
+  completeText: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 16,
-    color: 'white',
-  },
-  stepText: {
-    fontSize: 18,
+    color: '#3B3B3B',
     textAlign: 'center',
-    marginVertical: 10,
-    color: 'white',
+    marginBottom: 20,
   },
-  image: {
+  completeImage: {
     width: '50%',
-    height: 150,
+    height: undefined,
+    aspectRatio: 16 / 9,
+    resizeMode: 'contain',
+    marginBottom: 20,
+  },
+  homeButton: {
+    backgroundColor: '#008009',
+    paddingVertical: 14,
+    paddingHorizontal: 40,
     borderRadius: 8,
-    marginVertical: 20,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    marginVertical: 20,
-  },
-  button: {
-    flex: 1,
-    padding: 10,
-    backgroundColor: '#ff6347',
-    marginHorizontal: 100,
-    borderRadius: 5,
     alignItems: 'center',
   },
-  disabledButton: {
-    backgroundColor: '#ccc',
+  homeButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });
 
 export default CookMode;
+
