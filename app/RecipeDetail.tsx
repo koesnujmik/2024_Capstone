@@ -160,8 +160,8 @@ const styles = StyleSheet.create({
   },
   cookButton: {
     backgroundColor: '#008009', // 짙은 녹색
-    paddingVertical: 14,
-    paddingHorizontal: 100,
+    paddingVertical: 12,
+    paddingHorizontal: 70,
     borderRadius: 50,
     alignItems: 'center',
   },
