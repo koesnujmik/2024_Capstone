@@ -75,20 +75,6 @@ const CookMode: React.FC<CookModeProps> = ({
       return false;
     }
   };
-
-  const checkServerStatus = async () => {
-    try {
-      const response = await fetch("http://192.168.0.93:8000/upload/", { method: "HEAD" }); // 서버 IP와 포트를 설정
-      if (response.ok) {
-        console.log("Server is running.");
-        return true;
-      }
-    } catch (error) {
-      console.error("Server is not running:", error);
-      Alert.alert("Error", "FastAPI 서버가 실행 중이 아닙니다.");
-    }
-    return false;
-  };
   
 
   const takePhotoAndSave = async () => {
@@ -176,7 +162,7 @@ const CookMode: React.FC<CookModeProps> = ({
     onClose(); 
   };
 
-  const handleWakeWordDetected = () => {
+  const cookModeStart = () => {
     console.log('Wake word detected!');
     setIsCookMode(true); // CookMode 활성화
     setCurrentStep(0);
@@ -290,7 +276,16 @@ const CookMode: React.FC<CookModeProps> = ({
       ) : (
         <View style={styles.cameraModeContainer}>
           <CustomText style={styles.adjustmentText}>카메라 화면을 조정해주세요</CustomText>
-          <NextStepWord onNextStepWordDetected={handleWakeWordDetected} />
+          <NextStepWord onNextStepWordDetected={cookModeStart} />
+
+          <View style={styles.buttonContainer}> 
+            <TouchableOpacity
+              style={styles.button}
+              onPress={cookModeStart}
+            >
+              <CustomText style={styles.buttonText}>요리 시작</CustomText>
+            </TouchableOpacity>              
+          </View>
         </View>
       )}
     </View>
@@ -337,9 +332,9 @@ const styles = StyleSheet.create({
     color: 'black',
   },
   cameraModeContainer: {
-    position: 'absolute', // 위치 고정
-    top: 0, 
-    alignSelf: 'center', // 수평 가운데 정렬
+    flex: 1, // Ensures the container takes up the entire screen space
+    justifyContent: 'center', // Aligns its children vertically in the center
+    alignItems: 'center', // Centers the content horizontally
     padding: 16,
   },
   adjustmentText: {
@@ -371,8 +366,8 @@ const styles = StyleSheet.create({
   },
   
   buttonContainer: {
-    position: 'absolute', // 버튼을 화면 하단에 고정
-    bottom: 10,
+    position: 'absolute',
+    bottom: 10, // Keeps the button at the bottom of the screen
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-around',
