@@ -2,6 +2,8 @@ npm install
 
 gradle.properties에서 맨 윗 줄 org.gradle.java.home=C:/Program Files/Java/자신의 컴퓨터에 설치된 java version 고치기
 
+휴대전화 정보 -> 소프트웨어정보-> 빌드번호 7번 클릭: 개발자 옵션 활성화 -> usb 디버깅 활성화 -> 터미널에서 adb devices을 치고 핸드폰이 연결되어 있는지 확인
+
 에러시:
 
 rmdir /s /q android\.gradle
