@@ -109,8 +109,26 @@ const CookMode: React.FC<CookModeProps> = ({
     }
   };
 
+  const sendStepToFastAPI = async (step: string) => {
+    try {
+      console.log(JSON.stringify({ step }))
+      const response = await fetch('https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat3', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ step }), // JSON 형식으로 step 전송
+      });
+  
+      const responseData = await response.json();
+      console.log(responseData); // FastAPI 응답 확인
+    } catch (error) {
+      console.error('Error sending step to FastAPI:', error);
+    }
+  };
+
   const uploadPhotoToServer = async (filePath: string) => {
-    const serverUrl = 'http://192.168.0.93:8000/upload/'; //본인 ip로 변경
+    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
 
     const formData = new FormData();
@@ -145,7 +163,9 @@ const CookMode: React.FC<CookModeProps> = ({
   // Move to next step if possible
   const handleNextStep = () => {
     if (currentStep < instructions.length) {
-      setCurrentStep(currentStep + 1);
+      const newStep = currentStep + 1
+      setCurrentStep(newStep);
+      sendStepToFastAPI(String(newStep));
     } else {
       setIsCookComplete(true); // 마지막 단계 이후 요리 완성 상태로 전환
     }
@@ -269,7 +289,7 @@ const CookMode: React.FC<CookModeProps> = ({
               takePhotoAndSave();
             }}
           />
-
+          
           <Record/>
           </View>
         )
