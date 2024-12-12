@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Image, StyleSheet, ScrollView, TouchableOpacity, BackHandler} from 'react-native';
 import CookMode from './CookMode';
 import CustomText from './CustomText';
 
@@ -14,8 +14,25 @@ type RecipeDetailProps = {
   onStartCamera: () => void;
 };
 
+
 const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack }) => {
   const [showCamera, setShowCamera] = useState(false);
+
+  useEffect(() => {
+    // Handle back button press on Android
+    const backAction = () => {
+      onBack(); // Call the onBack function passed as a prop
+      return true; // Prevent default behavior (exit the app or go back in history)
+    };
+
+    // Add event listener for back button press
+    BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    // Cleanup event listener when component is unmounted
+    return () => {
+      BackHandler.removeEventListener('hardwareBackPress', backAction);
+    };
+  }, [onBack]);
 
   const handleStartCooking = () => {
     setShowCamera(true); // 카메라 화면 표시
@@ -64,12 +81,12 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack }) => {
         <CustomText style={styles.sectionTitle}>조리 과정</CustomText>
         {recipe.recipeInstructions.map((step, index) => (
           <View key={index} style={styles.stepContainer}>
-            <CustomText style={styles.stepText}>
-              {index + 1}. {step.text}
-            </CustomText>
             {step.image && (
               <Image source={{ uri: step.image }} style={styles.stepImage} />
             )}
+            <CustomText style={styles.stepText}>
+              {index + 1}. {step.text}
+            </CustomText>
           </View>
         ))}
         <View style={styles.buttonContainer}>
