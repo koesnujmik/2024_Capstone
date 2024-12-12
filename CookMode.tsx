@@ -272,7 +272,6 @@ const CookMode: React.FC<CookModeProps> = ({
     console.log('Wake word detected!');
     setIsCookMode(true); // CookMode 활성화
     setCurrentStep(0);
-    setIsTimerVisible(true);
   };
 
   if (!hasPermission) {
