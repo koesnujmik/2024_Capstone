@@ -53,7 +53,60 @@ const CookMode: React.FC<CookModeProps> = ({
     if (startFromWakeWord && currentStep <= instructions.length) {
       handleNextStep();
     }
+
+      // Periodic update every 15 seconds
+  const intervalId = setInterval(async () => {
+    if (currentStep < instructions.length) {
+      const currentInstruction = instructions[currentStep]?.text || 'No instruction';
+      console.log('Sending current step and capturing photo...');
+
+      await sendStepToFastAPI(currentInstruction);
+      await sendRecipeToFastAPI();
+
+      if (cameraRef.current) {
+        await takePhotoAndSave();
+      }
+    } else {
+      console.log('All steps completed, stopping interval.');
+      clearInterval(intervalId);
+    }
+  }, 15000); // Execute every 15 seconds
+
+  // Cleanup on unmount
+  return () => clearInterval(intervalId);
+
   }, [startFromWakeWord, currentStep, instructions.length]);
+
+
+  const sendRecipeToFastAPI = async () => {
+    try {
+      const recipeData = {
+        name: recipeName,
+        recipeIngredient: ingredients,
+        recipeInstructions: instructions,
+      };
+
+      console.log('Sending recipe data:', JSON.stringify(recipeData));
+
+      const response = await fetch('http://221.149.60.227:8000/send-recipe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(recipeData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Recipe sent successfully:', result);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to send recipe. Error:', errorData);
+      }
+    } catch (error) {
+      console.error('Error sending recipe to FastAPI:', error);
+    }
+  };
 
   const requestAudioPermission = async () => {
     try {
@@ -128,7 +181,7 @@ const CookMode: React.FC<CookModeProps> = ({
   };
 
   const uploadPhotoToServer = async (filePath: string) => {
-    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat'; //본인 ip로 변경
+    const serverUrl = 'http://221.149.60.227:8000/upload/'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
 
     const formData = new FormData();
@@ -166,6 +219,7 @@ const CookMode: React.FC<CookModeProps> = ({
       const newStep = currentStep + 1
       setCurrentStep(newStep);
       sendStepToFastAPI(String(newStep));
+      sendRecipeToFastAPI();
     } else {
       setIsCookComplete(true); // 마지막 단계 이후 요리 완성 상태로 전환
     }
