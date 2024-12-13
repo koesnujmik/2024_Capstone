@@ -73,6 +73,12 @@ const CookMode: React.FC<CookModeProps> = ({
     }
   }, 15000); // Execute every 15 seconds
 
+  // Cleanup on unmount
+  return () => clearInterval(intervalId);
+
+  }, [startFromWakeWord, currentStep, instructions.length]);
+
+  
   useEffect(() => {
     if (remainingTime !== null && remainingTime > 0) {
       const timer = setInterval(() => {
@@ -89,11 +95,6 @@ const CookMode: React.FC<CookModeProps> = ({
       return () => clearInterval(timer);
     }
   }, [remainingTime]);
-
-  // Cleanup on unmount
-  return () => clearInterval(intervalId);
-
-  }, [startFromWakeWord, currentStep, instructions.length]);
 
   const requestAudioPermission = async () => {
     try {
@@ -214,8 +215,14 @@ const CookMode: React.FC<CookModeProps> = ({
   };
 
   const uploadPhotoToServer = async (filePath: string, step: string) => {
-    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io:4000/chat2/'; //본인 ip로 변경
+    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
+
+    const recipeData = {
+      name: recipeName,
+      recipeIngredient: ingredients,
+      recipeInstructions: instructions,
+    };
 
     const formData = new FormData();
     formData.append('file', {
@@ -223,16 +230,10 @@ const CookMode: React.FC<CookModeProps> = ({
       type: 'image/jpg',
       name: fileName,
     });
+  
+    formData.append('step', step);
 
-    formData.append('recipeData', {
-        name: recipeName,
-        recipeIngredient: ingredients,
-        recipeInstructions: instructions,
-    });
-
-    formData.append('step', {
-        step: step
-    });
+    console.log(formData);
 
     try {
       const response = await fetch(serverUrl, {
