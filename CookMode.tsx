@@ -105,7 +105,6 @@ const CookMode: React.FC<CookModeProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          step: currentStep,
         }),
       });
 
@@ -195,10 +194,40 @@ const CookMode: React.FC<CookModeProps> = ({
     }
   };
 
+  const sendRecipeToFastAPI = async () => {
+    try {
+      const recipeData = {
+        name: recipeName,
+        recipeIngredient: ingredients,
+        recipeInstructions: instructions,
+      };
+
+      console.log('Sending recipe data:', JSON.stringify(recipeData));
+
+      const response = await fetch('http://0.0.0.0:8000/send-recipe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(recipeData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Recipe sent successfully:', result);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to send recipe. Error:', errorData);
+      }
+    } catch (error) {
+      console.error('Error sending recipe to FastAPI:', error);
+    }
+  };
+
   const sendStepToFastAPI = async (step: string) => {
     try {
       console.log(JSON.stringify({ step }))
-      const response = await fetch('http://192.168.0.93:8000/upload/', {
+      const response = await fetch('http://0.0.0.0:8000/upload/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -212,9 +241,10 @@ const CookMode: React.FC<CookModeProps> = ({
       console.error('Error sending step to FastAPI:', error);
     }
   };
+  
 
   const uploadPhotoToServer = async (filePath: string) => {
-    const serverUrl = 'http://192.168.0.93:8000/upload/'; //본인 ip로 변경
+    const serverUrl = 'http://0.0.0.0:8000/upload/'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
 
     const formData = new FormData();
@@ -252,6 +282,7 @@ const CookMode: React.FC<CookModeProps> = ({
       const newStep = currentStep + 1
       setCurrentStep(newStep);
       sendStepToFastAPI(String(newStep));
+
     } else {
       setIsCookComplete(true); // 마지막 단계 이후 요리 완성 상태로 전환
     }
