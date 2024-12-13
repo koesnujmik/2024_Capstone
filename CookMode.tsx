@@ -63,11 +63,11 @@ const CookMode: React.FC<CookModeProps> = ({
       // Periodic update every 15 seconds
   const intervalId = setInterval(async () => {
     if (currentStep < instructions.length) {
-      const currentInstruction = instructions[currentStep]?.text || 'No instruction';
+
       console.log('Sending current step and capturing photo...');
 
       if (cameraRef.current) {
-        await takePhotoAndSave(currentInstruction);
+        await takePhotoAndSave(String(currentStep));
       }
     } else {
       console.log('All steps completed, stopping interval.');
@@ -386,7 +386,9 @@ const CookMode: React.FC<CookModeProps> = ({
           <WakeWordScreen
             onWakeWordDetected={() => {
               console.log("Wake word detected! Calling takePhotoAndSave...");
-              takePhotoAndSave(String(currentStep));
+              setTimeout(() => {
+                takePhotoAndSave(String(currentStep));
+              }, 6000)
             }}
           />
           
