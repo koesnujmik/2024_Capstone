@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PermissionsAndroid, View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, Modal } from 'react-native';
+import { PermissionsAndroid, View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView } from 'react-native';
 import { Camera, useCameraDevice, PhotoFile } from 'react-native-vision-camera';
-import Sound from 'react-native-sound'; // 음성 출력 모듈
 import NextStepWord from './NextStepWord'; // WakeWordScreen import
+import Sound from 'react-native-sound'; // 음성 출력 모듈
 import RNFS from 'react-native-fs'; // 파일 시스템 모듈
 import WakeWordScreen from './WakeWord';
 import Record from './record';
@@ -57,24 +57,43 @@ const CookMode: React.FC<CookModeProps> = ({
     if (startFromWakeWord && currentStep <= instructions.length) {
       handleNextStep();
     }
-  }, [startFromWakeWord, currentStep, instructions.length]);
+
+      // Periodic update every 15 seconds
+  const intervalId = setInterval(async () => {
+    if (currentStep < instructions.length) {
+      const currentInstruction = instructions[currentStep]?.text || 'No instruction';
+      console.log('Sending current step and capturing photo...');
+
+      if (cameraRef.current) {
+        await takePhotoAndSave(currentInstruction);
+      }
+    } else {
+      console.log('All steps completed, stopping interval.');
+      clearInterval(intervalId);
+    }
+  }, 15000); // Execute every 15 seconds
 
   useEffect(() => {
-  if (remainingTime !== null && remainingTime > 0) {
-    const timer = setInterval(() => {
-      setRemainingTime((prevTime) => {
-        if (prevTime && prevTime > 1) {
-          return prevTime - 1;
-        } else {
-          clearInterval(timer);
-          setIsTimerVisible(false);
-          return null;
-        }
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }
-}, [remainingTime]);
+    if (remainingTime !== null && remainingTime > 0) {
+      const timer = setInterval(() => {
+        setRemainingTime((prevTime) => {
+          if (prevTime && prevTime > 1) {
+            return prevTime - 1;
+          } else {
+            clearInterval(timer);
+            setIsTimerVisible(false);
+            return null;
+          }
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [remainingTime]);
+
+  // Cleanup on unmount
+  return () => clearInterval(intervalId);
+
+  }, [startFromWakeWord, currentStep, instructions.length]);
 
   const requestAudioPermission = async () => {
     try {
@@ -96,7 +115,7 @@ const CookMode: React.FC<CookModeProps> = ({
       return false;
     }
   };
-  {/*
+  
   const fetchDemoResults = async () => {
     try {
       const response = await fetch('http://192.168.0.93:8000/demo/', {
@@ -137,7 +156,7 @@ const CookMode: React.FC<CookModeProps> = ({
     }
   };
 
-  const playCautionAudio = (audioFilePath) => {
+  const playCautionAudio = (audioFilePath: string) => {
     const sound = new Sound(audioFilePath, Sound.MAIN_BUNDLE, (error) => {
       if (error) {
         console.error('Failed to load sound', error);
@@ -149,7 +168,7 @@ const CookMode: React.FC<CookModeProps> = ({
     });
   };
 
-  const playResponseAudio = (audioFilePath) => {
+  const playResponseAudio = (audioFilePath: string) => {
     const sound = new Sound(audioFilePath, Sound.MAIN_BUNDLE, (error) => {
       if (error) {
         console.error('Failed to load response sound', error);
@@ -160,8 +179,8 @@ const CookMode: React.FC<CookModeProps> = ({
       });
     });
   };
-*/}
-  const takePhotoAndSave = async () => {
+
+  const takePhotoAndSave = async (step: string) => {
     if (!cameraRef.current) {
       Alert.alert('Error', 'Camera is not ready.');
       return;
@@ -186,65 +205,16 @@ const CookMode: React.FC<CookModeProps> = ({
       setFilePath(savePath);
       console.log('filePath updated to:', savePath);
 
-      await uploadPhotoToServer(savePath);
-     // await fetchDemoResults(); // 사진 업로드 후 Demo 결과 가져오기
+      await uploadPhotoToServer(savePath, step);
+      await fetchDemoResults();
     } catch (error) {
       console.error('Error during photo save:', error);
       Alert.alert('Error', 'Failed to take photo.');
     }
   };
 
-  const sendRecipeToFastAPI = async () => {
-    try {
-      const recipeData = {
-        name: recipeName,
-        recipeIngredient: ingredients,
-        recipeInstructions: instructions,
-      };
-
-      console.log('Sending recipe data:', JSON.stringify(recipeData));
-
-      const response = await fetch('http://0.0.0.0:8000/send-recipe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(recipeData),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Recipe sent successfully:', result);
-      } else {
-        const errorData = await response.json();
-        console.error('Failed to send recipe. Error:', errorData);
-      }
-    } catch (error) {
-      console.error('Error sending recipe to FastAPI:', error);
-    }
-  };
-
-  const sendStepToFastAPI = async (step: string) => {
-    try {
-      console.log(JSON.stringify({ step }))
-      const response = await fetch('http://0.0.0.0:8000/upload/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ step }), // JSON 형식으로 step 전송
-      });
-  
-      const responseData = await response.json();
-      console.log(responseData); // FastAPI 응답 확인
-    } catch (error) {
-      console.error('Error sending step to FastAPI:', error);
-    }
-  };
-  
-
-  const uploadPhotoToServer = async (filePath: string) => {
-    const serverUrl = 'http://0.0.0.0:8000/upload/'; //본인 ip로 변경
+  const uploadPhotoToServer = async (filePath: string, step: string) => {
+    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io:4000/chat2/'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
 
     const formData = new FormData();
@@ -252,6 +222,16 @@ const CookMode: React.FC<CookModeProps> = ({
       uri: `file://${filePath}`, // 명시적으로 file:// 추가
       type: 'image/jpg',
       name: fileName,
+    });
+
+    formData.append('recipeData', {
+        name: recipeName,
+        recipeIngredient: ingredients,
+        recipeInstructions: instructions,
+    });
+
+    formData.append('step', {
+        step: step
     });
 
     try {
@@ -281,8 +261,6 @@ const CookMode: React.FC<CookModeProps> = ({
     if (currentStep < instructions.length) {
       const newStep = currentStep + 1
       setCurrentStep(newStep);
-      sendStepToFastAPI(String(newStep));
-
     } else {
       setIsCookComplete(true); // 마지막 단계 이후 요리 완성 상태로 전환
     }
@@ -337,28 +315,7 @@ const CookMode: React.FC<CookModeProps> = ({
       <TouchableOpacity style={styles.backButton} onPress={onClose}>
         <CustomText style={styles.backButtonText}> ← </CustomText>
       </TouchableOpacity>
-
-      {isTimerVisible && (
-        <Modal
-          transparent={true}
-          animationType="slide"
-          visible={isTimerVisible}
-          onRequestClose={() => setIsTimerVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.timerPopup}>
-              <CustomText style={styles.timerText}>타이머: {remainingTime}초</CustomText>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setIsTimerVisible(false)}
-              >
-                <CustomText style={styles.buttonText}>닫기</CustomText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
-
+  
       {isCookMode ? (
         isCookComplete ? (
           <View style={styles.cookCompleteContainer}>
@@ -424,7 +381,7 @@ const CookMode: React.FC<CookModeProps> = ({
           <WakeWordScreen
             onWakeWordDetected={() => {
               console.log("Wake word detected! Calling takePhotoAndSave...");
-              takePhotoAndSave();
+              takePhotoAndSave(String(currentStep));
             }}
           />
           
@@ -463,31 +420,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
     padding: 8,
 
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  timerPopup: {
-    width: 300,
-    padding: 20,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  timerText: {
-    fontSize: 20,
-    marginBottom: 15,
-    color: '#333',
-  },
-  closeButton: {
-    backgroundColor: '#008009',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
   },
   sectionTitle: {
     fontSize: 20,
