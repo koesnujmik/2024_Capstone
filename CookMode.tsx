@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PermissionsAndroid, View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView } from 'react-native';
 import { Camera, useCameraDevice, PhotoFile } from 'react-native-vision-camera';
@@ -36,6 +37,7 @@ const CookMode: React.FC<CookModeProps> = ({
   const [timerValue, setTimerValue] = useState<number | null>(null);
   const [isTimerVisible, setIsTimerVisible] = useState(false); // 타이머 팝업 표시 여부
   const [remainingTime, setRemainingTime] = useState<number | null>(null); // 타이머 남은 시간
+  const [audioFilePath, setAudioFilePath] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -218,18 +220,20 @@ const CookMode: React.FC<CookModeProps> = ({
     const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
 
-    const recipeData = {
-      name: recipeName,
-      recipeIngredient: ingredients,
-      recipeInstructions: instructions,
-    };
-
     const formData = new FormData();
     formData.append('file', {
       uri: `file://${filePath}`, // 명시적으로 file:// 추가
       type: 'image/jpg',
       name: fileName,
     });
+
+    if (audioFilePath) {
+      formData.append('audio', {
+        uri: `file://${audioFilePath}`,
+        type: 'audio/m4a',
+        name: audioFilePath.split('/').pop() || 'recorded_audio.m4a',
+      });
+    }
   
     formData.append('step', step);
 
@@ -386,7 +390,7 @@ const CookMode: React.FC<CookModeProps> = ({
             }}
           />
           
-          <Record/>
+          <Record  onRecordingComplete={(filePath) => setAudioFilePath(filePath)}/>
           </View>
         )
       ) : (
