@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { PermissionsAndroid, View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView } from 'react-native';
 import { Camera, useCameraDevice, PhotoFile } from 'react-native-vision-camera';
@@ -72,7 +71,7 @@ const CookMode: React.FC<CookModeProps> = ({
       console.log('All steps completed, stopping interval.');
       clearInterval(intervalId);
     }
-  }, 15000); // Execute every 15 seconds
+  }, 5000); // Execute every 15 seconds
 
   // Cleanup on unmount
   return () => clearInterval(intervalId);
@@ -97,6 +96,13 @@ const CookMode: React.FC<CookModeProps> = ({
     }
   }, [remainingTime]);
 
+  useEffect(() => {
+    if (audioFilePath && filePath) {
+      // audioFilePath와 filePath 둘 다 준비되었을 때 업로드 실행
+      rootfunction(String(currentStep));
+    }
+  }, [audioFilePath, filePath]);
+
   const requestAudioPermission = async () => {
     try {
 
@@ -118,9 +124,9 @@ const CookMode: React.FC<CookModeProps> = ({
     }
   };
   
-  const fetchDemoResults = async () => {
+ /* const fetchDemoResults = async () => {
     try {
-      const response = await fetch('http://192.168.0.93:8000/demo/', {
+      const response = await fetch('https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat_final', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +162,7 @@ const CookMode: React.FC<CookModeProps> = ({
     } catch (error) {
       console.error('Error fetching demo results:', error);
     }
-  };
+  };*/
 
   const playCautionAudio = (audioFilePath: string) => {
     const sound = new Sound(audioFilePath, Sound.MAIN_BUNDLE, (error) => {
@@ -205,9 +211,9 @@ const CookMode: React.FC<CookModeProps> = ({
 
       // 상태 업데이트
       setFilePath(savePath);
-      console.log('filePath updated to:', savePath);
+      console.log('filePath updated to:', filePath);
 
-      await fetchDemoResults();
+      await rootfunction(String(currentStep));
     } catch (error) {
       console.error('Error during photo save:', error);
       Alert.alert('Error', 'Failed to take photo.');
@@ -215,20 +221,24 @@ const CookMode: React.FC<CookModeProps> = ({
   };
 
   const rootfunction = async (currentstep: string) => {
-    const photoPath = `${RNFS.DocumentDirectoryPath}/photo_${Date.now()}.jpg`;
+    if (!filePath) {
+      console.warn("No photo file to upload.");
+      return;
+    }
     
+    console.log(audioFilePath);
     if (audioFilePath) {
-      setTimeout(() => {
-      uploadAudioToServer(photoPath, currentstep);
-    }, 6000);
+      // 녹음 파일이 준비되기 전에 전송을 시도하면 안됨.
+      // 녹음 완료 후 audioFilePath가 셋팅되었다는 가정 하에
+      uploadAudioToServer(filePath, currentstep);
     } else {
       console.warn("No audio file to upload.");
-      uploadPhotoToServer(photoPath, currentstep);
+      uploadPhotoToServer(filePath, currentstep);
     }
   };
 
   const uploadPhotoToServer = async (filePath: string, step: string) => {
-    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat'; //본인 ip로 변경
+    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat_final_sec'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
 
     const formData = new FormData();
@@ -253,20 +263,33 @@ const CookMode: React.FC<CookModeProps> = ({
 
       console.log('Response status:', response.status);
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('File uploaded successfully:', result);
-      } else {
-        const error = await response.text();
-        console.error('Upload failed with status:', response.status, error);
+      const data = await response.json();
+      console.log('Demo response:', data);
+
+      // 다음 단계 여부 확인
+      if (data.nextStep === true) {
+        handleNextStep();
       }
+
+      // 주의사항 처리
+      if (data.caution && typeof data.caution === 'string') {
+        playCautionAudio(data.caution);
+      }
+
+      // 타이머 처리
+      if (data.timer && data.timer > 0) {
+        setTimerValue(data.timer);
+        setRemainingTime(data.timer); // 타이머 남은 시간 설정
+        setIsTimerVisible(true);
+      }
+
     } catch (error) {
-      console.error('Network request failed:', error);
+      console.error('Error fetching demo results:', error);
     }
   };
 
   const uploadAudioToServer = async (filePath: string, step: string) => {
-    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat'; //본인 ip로 변경
+    const serverUrl = 'https://mzqtrgawbxztzmzd.tunnel-pt.elice.io/chat_final'; //본인 ip로 변경
     const fileName = filePath.split('/').pop();
 
     const formData = new FormData();
@@ -288,6 +311,7 @@ const CookMode: React.FC<CookModeProps> = ({
 
     console.log(formData);
 
+
     try {
       const response = await fetch(serverUrl, {
         method: 'POST',
@@ -298,8 +322,46 @@ const CookMode: React.FC<CookModeProps> = ({
       });
 
       console.log('Response status:', response.status);
+      
+      const data = await response.json();
+      console.log('Demo response:', data);
 
-      if (response.ok) {
+      // 다음 단계 여부 확인
+      if (data.nextStep === true) {
+        handleNextStep();
+      }
+
+      // 주의사항 처리
+      if (data.caution && typeof data.caution === 'string') {
+        playCautionAudio(data.caution);
+      }
+
+      // 타이머 처리
+      if (data.timer && data.timer > 0) {
+        setTimerValue(data.timer);
+        setRemainingTime(data.timer); // 타이머 남은 시간 설정
+        setIsTimerVisible(true);
+      }
+
+      const base64Data = data.responseAudio;
+
+      // 파일 저장 경로 설정
+      const path = `${RNFS.DocumentDirectoryPath}/output_${Date.now()}.mp3`; // React Native 로컬 폴더
+
+      // 파일 쓰기 (Base64 데이터를 MP3 파일로 저장)
+      await RNFS.writeFile(path, base64Data, "base64");
+      Alert.alert("File saved successfully!", `Saved at: ${path}`);
+      console.log("Audio file saved at:", path);
+
+      // 답변 음성 처리
+      if (path && typeof path === 'string') {
+        playResponseAudio(path);
+      }
+    } catch (error) {
+      console.error('Error fetching demo results:', error);
+    }
+
+      /*if (response.ok) {
         const result = await response.json();
         console.log('File uploaded successfully:', result);
       } else {
@@ -308,7 +370,10 @@ const CookMode: React.FC<CookModeProps> = ({
       }
     } catch (error) {
       console.error('Network request failed:', error);
-    }
+    }*/
+
+    
+
   };
 
   // Move to next step if possible
@@ -438,8 +503,8 @@ const CookMode: React.FC<CookModeProps> = ({
           <WakeWordScreen
             onWakeWordDetected={async () => {
               console.log("Wake word detected! Calling takePhotoAndSave...");
-              takePhotoAndSave(String(currentStep));
-              rootfunction(String(currentStep));
+              await takePhotoAndSave(String(currentStep)); // 사진 촬영 완료까지 대기
+              rootfunction(String(currentStep)); // filePath가 확실히 업데이트된 후 호출
             }}
           />
           
